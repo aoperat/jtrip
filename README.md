@@ -41,17 +41,38 @@ npm install
 
 ### 3. 환경 변수 설정
 
-프로젝트 루트에 `.env` 파일을 생성하고 Supabase 프로젝트 정보를 입력하세요:
+프로젝트 루트에 `.env` 파일을 생성하고 다음 변수들을 입력하세요:
 
 ```env
 VITE_SUPABASE_URL=https://your-project-id.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
+VITE_GOOGLE_MAPS_API_KEY=your-google-maps-api-key
 ```
 
-- **URL**: Settings > API > Project URL
-- **Anon Key**: Settings > API > Project API keys > anon public
+- **Supabase URL**: Settings > API > Project URL
+- **Supabase Anon Key**: Settings > API > Project API keys > anon public
+- **Google Maps API Key**: [Google Cloud Console](https://console.cloud.google.com/)에서 발급
 
-### 4. 소셜 로그인 설정 (선택사항)
+### 4. 실행
+
+```bash
+npm run dev
+```
+
+브라우저에서 `http://localhost:5173` 접속
+
+### 5. GitHub Pages 배포
+
+자세한 배포 가이드는 [DEPLOY.md](./DEPLOY.md)를 참고하세요.
+
+**빠른 배포:**
+
+1. GitHub 리포지토리 생성 및 코드 push
+2. Settings > Secrets and variables > Actions에서 환경 변수 설정
+3. Settings > Pages에서 Source를 "GitHub Actions"로 설정
+4. `main` 브랜치에 push하면 자동 배포
+
+### 6. 소셜 로그인 설정 (선택사항)
 
 Supabase 대시보드에서:
 
