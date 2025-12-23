@@ -3,6 +3,7 @@ import { supabase } from './supabase';
 const BUCKET_NAME = 'tickets';
 const AVATAR_BUCKET_NAME = 'avatars';
 const TRAVEL_IMAGE_BUCKET_NAME = 'travel-images';
+const ITINERARY_IMAGE_BUCKET_NAME = 'itinerary-images';
 
 /**
  * 티켓 이미지를 Supabase Storage에 업로드
@@ -253,6 +254,61 @@ export async function uploadTravelImage(file, userId, travelId = null) {
     };
   } catch (error) {
     console.error('여행 이미지 업로드 실패:', error);
+    return {
+      data: null,
+      error,
+    };
+  }
+}
+
+/**
+ * 일정 이미지를 Supabase Storage에 업로드
+ * @param {File} file - 업로드할 파일
+ * @param {string} userId - 사용자 ID
+ * @param {string} itineraryId - 일정 ID (선택사항)
+ * @returns {Promise<{data: {path: string, publicUrl: string} | null, error: Error | null}>}
+ */
+export async function uploadItineraryImage(file, userId, itineraryId = null) {
+  try {
+    // 파일 크기 제한 (10MB)
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('파일 크기는 10MB 이하여야 합니다.');
+    }
+
+    // 이미지 파일만 허용
+    if (!file.type.startsWith('image/')) {
+      throw new Error('이미지 파일만 업로드 가능합니다.');
+    }
+
+    const fileExt = file.name.split('.').pop();
+    const tempId = itineraryId || `temp-${Date.now()}`;
+    const fileName = `${userId}/${tempId}-${Date.now()}.${fileExt}`;
+    const filePath = `${fileName}`;
+
+    // 파일 업로드
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from(ITINERARY_IMAGE_BUCKET_NAME)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (uploadError) throw uploadError;
+
+    // 공개 URL 가져오기
+    const { data: urlData } = supabase.storage
+      .from(ITINERARY_IMAGE_BUCKET_NAME)
+      .getPublicUrl(filePath);
+
+    return {
+      data: {
+        path: filePath,
+        publicUrl: urlData.publicUrl,
+      },
+      error: null,
+    };
+  } catch (error) {
+    console.error('일정 이미지 업로드 실패:', error);
     return {
       data: null,
       error,

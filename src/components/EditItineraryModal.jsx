@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
-import { X } from "lucide-react";
+import { X, Camera, Image as ImageIcon } from "lucide-react";
 import PlaceSearchInput from "./PlaceSearchInput";
+import { uploadItineraryImage, captureImageFromCamera, selectImageFromAlbum } from "../lib/storage";
+import { supabase } from "../lib/supabase";
 
 export default function EditItineraryModal({
   item,
@@ -29,6 +31,9 @@ export default function EditItineraryModal({
         }
       : null
   );
+  const [imagePreview, setImagePreview] = useState(item?.image || null);
+  const [imageFile, setImageFile] = useState(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handlePlaceSelect = (data) => {
     setLocationData(data);
@@ -41,6 +46,30 @@ export default function EditItineraryModal({
     }));
   };
 
+  const handleImageSelect = async (fromCamera = false) => {
+    try {
+      const file = fromCamera 
+        ? await captureImageFromCamera()
+        : await selectImageFromAlbum();
+      
+      if (file) {
+        setImageFile(file);
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          setImagePreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+      }
+    } catch (error) {
+      console.error("이미지 선택 실패:", error);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setImagePreview(null);
+    setImageFile(null);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) {
@@ -49,6 +78,24 @@ export default function EditItineraryModal({
     }
 
     try {
+      setIsUploading(true);
+      let imageUrl = formData.imageUrl || null;
+
+      // 새 이미지 업로드
+      if (imageFile) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) throw new Error("로그인이 필요합니다.");
+        
+        const uploadResult = await uploadItineraryImage(imageFile, user.id);
+        if (uploadResult.error) {
+          throw uploadResult.error;
+        }
+        imageUrl = uploadResult.data.publicUrl;
+      } else if (!imagePreview && item?.image) {
+        // 이미지가 제거된 경우
+        imageUrl = null;
+      }
+
       const result = await onUpdate({
         day: parseInt(formData.day),
         time: formData.time || null,
@@ -58,6 +105,7 @@ export default function EditItineraryModal({
         address: formData.address || null,
         latitude: formData.latitude || null,
         longitude: formData.longitude || null,
+        imageUrl: imageUrl,
       });
 
       if (result.error) {
@@ -67,6 +115,8 @@ export default function EditItineraryModal({
       }
     } catch (error) {
       alert("오류가 발생했습니다: " + error.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -169,6 +219,52 @@ export default function EditItineraryModal({
             />
           </div>
 
+          {/* 사진 업로드 섹션 */}
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+              사진 (선택)
+            </label>
+            {imagePreview ? (
+              <div className="relative">
+                <img
+                  src={imagePreview}
+                  alt="미리보기"
+                  className="w-full h-48 object-cover rounded-2xl"
+                />
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute top-2 right-2 p-2 bg-slate-900/70 backdrop-blur-sm text-white rounded-xl active:scale-90 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleImageSelect(true)}
+                  className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-[32px] group hover:bg-blue-50 transition-colors border-2 border-transparent active:border-blue-100 active:scale-95"
+                >
+                  <Camera className="w-6 h-6 text-slate-300 group-hover:text-blue-500" />
+                  <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-blue-600">
+                    카메라
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleImageSelect(false)}
+                  className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-[32px] group hover:bg-blue-50 transition-colors border-2 border-transparent active:border-blue-100 active:scale-95"
+                >
+                  <ImageIcon className="w-6 h-6 text-slate-300 group-hover:text-blue-500" />
+                  <span className="text-[10px] font-black uppercase text-slate-400 group-hover:text-blue-600">
+                    앨범
+                  </span>
+                </button>
+              </div>
+            )}
+          </div>
+
           <div className="border-t border-slate-100 pt-4 space-y-4">
             <p className="text-xs font-bold text-slate-600 mb-3">
               📍 장소 정보 (맵 표시용)
@@ -219,9 +315,10 @@ export default function EditItineraryModal({
             </button>
             <button
               type="submit"
-              className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
+              disabled={isUploading}
+              className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              수정하기
+              {isUploading ? "업로드 중..." : "수정하기"}
             </button>
           </div>
         </form>

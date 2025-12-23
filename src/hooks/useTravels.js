@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
+import { useState, useEffect } from "react";
+import { supabase } from "../lib/supabase";
 
 export function useTravels() {
   const [travels, setTravels] = useState([]);
@@ -11,16 +11,16 @@ export function useTravels() {
 
     // Realtime 구독 설정
     const subscription = supabase
-      .channel('travels-changes')
+      .channel("travels-changes")
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: '*',
-          schema: 'public',
-          table: 'travels',
+          event: "*",
+          schema: "public",
+          table: "travels",
         },
         (payload) => {
-          console.log('Travels 변경 감지:', payload);
+          console.log("Travels 변경 감지:", payload);
           fetchTravels();
         }
       )
@@ -34,8 +34,10 @@ export function useTravels() {
   const fetchTravels = async () => {
     try {
       setLoading(true);
-      
-      const { data: { user } } = await supabase.auth.getUser();
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         setTravels([]);
         setLoading(false);
@@ -43,34 +45,38 @@ export function useTravels() {
       }
 
       // 1단계: 자신이 참여한 여행의 ID 가져오기 (먼저 확인)
-      const { data: participantRecords, error: participantError } = await supabase
-        .from('travel_participants')
-        .select('travel_id')
-        .eq('user_id', user.id);
+      const { data: participantRecords, error: participantError } =
+        await supabase
+          .from("travel_participants")
+          .select("travel_id")
+          .eq("user_id", user.id);
 
       if (participantError) {
-        console.error('참여자 레코드 조회 실패:', participantError);
+        console.error("참여자 레코드 조회 실패:", participantError);
         throw participantError;
       }
 
       // 2단계: 참여한 모든 여행 ID 수집
-      const allParticipantTravelIds = (participantRecords || []).map(r => r.travel_id);
-      
+      const allParticipantTravelIds = (participantRecords || []).map(
+        (r) => r.travel_id
+      );
+
       // 3단계: 참여한 여행 가져오기 (RLS 정책을 통과하기 위해 참여자 테이블을 통해 조회)
       let allTravels = [];
       if (allParticipantTravelIds.length > 0) {
         // 참여한 여행들을 가져오기
-        const { data: participatedTravels, error: travelsError } = await supabase
-          .from('travels')
-          .select('*')
-          .in('id', allParticipantTravelIds)
-          .order('created_at', { ascending: false });
-        
+        const { data: participatedTravels, error: travelsError } =
+          await supabase
+            .from("travels")
+            .select("*")
+            .in("id", allParticipantTravelIds)
+            .order("created_at", { ascending: false });
+
         if (travelsError) {
-          console.error('여행 조회 실패:', travelsError);
+          console.error("여행 조회 실패:", travelsError);
           throw travelsError;
         }
-        
+
         allTravels = participatedTravels || [];
       }
 
@@ -82,15 +88,30 @@ export function useTravels() {
         return;
       }
 
-      const travelIds = allTravels.map(t => t.id);
+      const travelIds = allTravels.map((t) => t.id);
 
       // 5단계: 모든 여행의 참여자 가져오기
-      const { data: allParticipants, error: participantsError } = await supabase
-        .from('travel_participants')
-        .select('travel_id, user_id')
-        .in('travel_id', travelIds);
+      // SECURITY DEFINER 함수를 사용하여 travels 정책을 통과한 여행의 참여자 목록 가져오기
+      let allParticipants = [];
+      if (travelIds.length > 0) {
+        const { data: participants, error: participantsError } =
+          await supabase.rpc("get_travel_participants", {
+            travel_ids: travelIds,
+          });
 
-      if (participantsError) throw participantsError;
+        if (participantsError) {
+          console.error("참여자 조회 실패:", participantsError);
+          // 함수가 없을 수 있으므로 폴백: 자신의 레코드만 조회
+          const { data: myParticipants } = await supabase
+            .from("travel_participants")
+            .select("travel_id, user_id")
+            .in("travel_id", travelIds)
+            .eq("user_id", user.id);
+          allParticipants = myParticipants || [];
+        } else {
+          allParticipants = participants || [];
+        }
+      }
 
       // 6단계: 모든 참여자의 user_id 수집
       const allUserIds = new Set();
@@ -102,9 +123,9 @@ export function useTravels() {
       const profilesMap = new Map();
       if (allUserIds.size > 0) {
         const { data: profilesData } = await supabase
-          .from('profiles')
-          .select('id, email, name, avatar_url')
-          .in('id', Array.from(allUserIds));
+          .from("profiles")
+          .select("id, email, name, avatar_url")
+          .in("id", Array.from(allUserIds));
 
         if (profilesData) {
           profilesData.forEach((profile) => {
@@ -128,25 +149,30 @@ export function useTravels() {
         const participants = participantUserIds.map((userId) => {
           const profile = profilesMap.get(userId);
           if (profile) {
+            const displayName =
+              profile.name || profile.email?.split("@")[0] || "User";
             return {
               id: profile.id,
-              name: profile.name || profile.email?.split('@')[0] || 'User',
-              image: profile.avatar_url || profile.email?.split('@')[0] || 'User',
+              name: displayName,
+              image: profile.avatar_url || displayName.charAt(0).toUpperCase(),
             };
           }
           // 프로필이 없으면 user_id를 기반으로 기본 정보 생성
+          const defaultName = userId?.substring(0, 8) || "User";
           return {
             id: userId,
-            name: userId?.substring(0, 8) || 'User',
-            image: userId?.substring(0, 8) || 'User',
+            name: defaultName,
+            image: defaultName.charAt(0).toUpperCase(),
           };
         });
-        
+
         return {
           id: travel.id,
           title: travel.title,
           date: `${travel.start_date} - ${travel.end_date}`,
-          image: travel.image_url || 'https://images.unsplash.com/photo-1540959733332-e94e270b4052?w=800&q=80',
+          image:
+            travel.image_url ||
+            "https://images.unsplash.com/photo-1540959733332-e94e270b4052?w=800&q=80",
           participants,
           start_date: travel.start_date,
           end_date: travel.end_date,
@@ -157,7 +183,7 @@ export function useTravels() {
       setTravels(transformedTravels);
       setError(null);
     } catch (err) {
-      console.error('여행 목록 가져오기 실패:', err);
+      console.error("여행 목록 가져오기 실패:", err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -166,11 +192,13 @@ export function useTravels() {
 
   const createTravel = async (travelData) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('로그인이 필요합니다.');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
 
       const { data, error: createError } = await supabase
-        .from('travels')
+        .from("travels")
         .insert({
           title: travelData.title,
           start_date: travelData.start_date,
@@ -184,7 +212,7 @@ export function useTravels() {
       if (createError) throw createError;
 
       // 생성자를 참여자로 추가
-      await supabase.from('travel_participants').insert({
+      await supabase.from("travel_participants").insert({
         travel_id: data.id,
         user_id: user.id,
       });
@@ -192,7 +220,7 @@ export function useTravels() {
       await fetchTravels();
       return { data, error: null };
     } catch (err) {
-      console.error('여행 생성 실패:', err);
+      console.error("여행 생성 실패:", err);
       return { data: null, error: err };
     }
   };
@@ -200,9 +228,9 @@ export function useTravels() {
   const updateTravel = async (id, updates) => {
     try {
       const { data, error: updateError } = await supabase
-        .from('travels')
+        .from("travels")
         .update(updates)
-        .eq('id', id)
+        .eq("id", id)
         .select()
         .single();
 
@@ -210,7 +238,7 @@ export function useTravels() {
       await fetchTravels();
       return { data, error: null };
     } catch (err) {
-      console.error('여행 업데이트 실패:', err);
+      console.error("여행 업데이트 실패:", err);
       return { data: null, error: err };
     }
   };
@@ -218,64 +246,73 @@ export function useTravels() {
   const deleteTravel = async (id) => {
     try {
       const { error: deleteError } = await supabase
-        .from('travels')
+        .from("travels")
         .delete()
-        .eq('id', id);
+        .eq("id", id);
 
       if (deleteError) throw deleteError;
       await fetchTravels();
       return { error: null };
     } catch (err) {
-      console.error('여행 삭제 실패:', err);
+      console.error("여행 삭제 실패:", err);
       return { error: err };
     }
   };
 
   const addParticipant = async (travelId, email) => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('로그인이 필요합니다.');
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
 
       // profiles 테이블에서 이메일로 사용자 찾기
       const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .eq('email', email)
+        .from("profiles")
+        .select("id, email")
+        .eq("email", email)
         .maybeSingle();
 
       // 사용자가 존재하는 경우
       if (profiles && !profileError) {
         // 참여자 추가
         const { error: addError } = await supabase
-          .from('travel_participants')
+          .from("travel_participants")
           .insert({
             travel_id: travelId,
             user_id: profiles.id,
           });
 
         if (addError) {
-          if (addError.code === '23505') {
-            throw new Error('이미 참여 중인 사용자입니다.');
+          if (addError.code === "23505") {
+            throw new Error("이미 참여 중인 사용자입니다.");
           }
           throw addError;
         }
 
         await fetchTravels();
-        return { error: null, type: 'user' }; // 사용자 초대 성공
+        return { error: null, type: "user" }; // 사용자 초대 성공
       }
 
       // 사용자가 없는 경우 - 초대 링크 생성
-      return { error: null, type: 'invite_link', email };
+      return { error: null, type: "invite_link", email };
     } catch (err) {
-      console.error('참여자 추가 실패:', err);
+      console.error("참여자 추가 실패:", err);
       return { error: err };
     }
   };
 
   const createInviteLink = (travelId, email) => {
     // 간단한 토큰 생성 (실제로는 더 안전한 방법 사용 권장)
-    const token = btoa(`${travelId}:${email}:${Date.now()}`).replace(/[+/=]/g, '');
-    const inviteUrl = `${window.location.origin}/invite?token=${token}&travel=${travelId}&email=${encodeURIComponent(email)}`;
+    const token = btoa(`${travelId}:${email}:${Date.now()}`).replace(
+      /[+/=]/g,
+      ""
+    );
+    const inviteUrl = `${
+      window.location.origin
+    }/invite?token=${token}&travel=${travelId}&email=${encodeURIComponent(
+      email
+    )}`;
     return inviteUrl;
   };
 
@@ -291,4 +328,3 @@ export function useTravels() {
     refetch: fetchTravels,
   };
 }
-

@@ -66,6 +66,7 @@ export function useItinerary(travelId) {
           address: item.address || null,
           latitude: item.latitude || null,
           longitude: item.longitude || null,
+          image: item.image_url || null,
           is_checked: item.is_checked,
           hasTicket: false, // 나중에 ticket_types와 조인하여 설정
           prepId: null, // 나중에 preparations와 조인하여 설정
@@ -101,6 +102,7 @@ export function useItinerary(travelId) {
           address: itemData.address || null,
           latitude: itemData.latitude || null,
           longitude: itemData.longitude || null,
+          image_url: itemData.imageUrl || null,
           is_checked: false,
           created_by: user.id,
         })

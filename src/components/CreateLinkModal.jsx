@@ -16,6 +16,7 @@ const CreateLinkModal = ({
   const [amount, setAmount] = useState('');
   const [prepType, setPrepType] = useState('common');
   const [category, setCategory] = useState('Tip');
+  const [ticketMode, setTicketMode] = useState('individual'); // 티켓 모드 추가
   const [linkedItineraryId, setLinkedItineraryId] = useState('');
   const [itineraryOptions, setItineraryOptions] = useState([]);
 
@@ -76,7 +77,7 @@ const CreateLinkModal = ({
         // Ticket
         data = {
           name: name,
-          mode: 'individual', // 기본값
+          mode: ticketMode, // 선택된 모드 사용
           linkedItineraryId: linkedItineraryId || null,
         };
       }
@@ -157,6 +158,41 @@ const CreateLinkModal = ({
               >
                 Personal
               </button>
+            </div>
+          )}
+
+          {!isPrep && !isInfo && !isExpense && (
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                티켓 타입
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setTicketMode('individual')}
+                  className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest tracking-tighter leading-none transition-all ${
+                    ticketMode === 'individual'
+                      ? 'bg-blue-50 text-blue-600 border-blue-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-100'
+                  }`}
+                >
+                  개별
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setTicketMode('group')}
+                  className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest tracking-tighter leading-none transition-all ${
+                    ticketMode === 'group'
+                      ? 'bg-blue-50 text-blue-600 border-blue-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-100'
+                  }`}
+                >
+                  공통
+                </button>
+              </div>
+              <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
+                * 개별: 각 참여자가 따로 등록 / 공통: 한 번만 등록
+              </p>
             </div>
           )}
 

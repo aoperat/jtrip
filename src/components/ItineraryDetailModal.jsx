@@ -74,6 +74,18 @@ export default function ItineraryDetailModal({
       </header>
 
       <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-32">
+        {/* Header Image */}
+        {item.image && (
+          <div className="relative h-64 -mx-6 -mt-6 mb-6 overflow-hidden bg-slate-100">
+            <img
+              src={item.image}
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-white via-transparent to-black/20" />
+          </div>
+        )}
+
         {/* Header Info */}
         <section className="space-y-4">
           <div className="flex items-center gap-3">
@@ -85,12 +97,21 @@ export default function ItineraryDetailModal({
             {trip?.participants && (
               <div className="flex -space-x-2">
                 {trip.participants.map((p, i) => (
-                  <img
+                  <div
                     key={i}
-                    className="w-7 h-7 rounded-full border-2 border-white shadow-sm"
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.image || p.name}`}
-                    alt={p.name}
-                  />
+                    className="w-7 h-7 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-[10px] font-bold"
+                    title={p.name}
+                  >
+                    {typeof p.image === 'string' && p.image.startsWith('http') ? (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      p.image || p.name?.charAt(0)?.toUpperCase() || 'U'
+                    )}
+                  </div>
                 ))}
               </div>
             )}

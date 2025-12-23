@@ -129,6 +129,7 @@ ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view travels they participate in"
   ON travels FOR SELECT
   USING (
+    created_by = auth.uid() OR
     EXISTS (
       SELECT 1 FROM travel_participants
       WHERE travel_participants.travel_id = travels.id
@@ -155,13 +156,19 @@ CREATE POLICY "Users can delete their travels"
   USING (auth.uid() = created_by);
 
 -- RLS 정책: Travel_Participants
+-- 자신의 레코드이거나, 자신이 참여한 여행의 참여자들을 볼 수 있도록
+-- 순환 참조를 피하기 위해 서브쿼리에서 다른 레코드(id가 다른)를 참조
 CREATE POLICY "Users can view participants of their travels"
   ON travel_participants FOR SELECT
   USING (
+    -- 자신의 레코드
+    user_id = auth.uid() OR
+    -- 자신이 참여한 여행의 참여자들 (서브쿼리에서 다른 레코드 참조하여 순환 방지)
     EXISTS (
       SELECT 1 FROM travel_participants tp
       WHERE tp.travel_id = travel_participants.travel_id
       AND tp.user_id = auth.uid()
+      AND tp.id <> travel_participants.id
     )
   );
 
@@ -252,6 +259,39 @@ CREATE POLICY "Users can manage notices of their travels"
       AND travel_participants.user_id = auth.uid()
     )
   );
+
+-- SECURITY DEFINER 함수: travels 정책을 통과한 여행의 참여자 목록 가져오기
+-- RLS 정책의 순환 참조 문제를 해결하기 위해 사용
+CREATE OR REPLACE FUNCTION get_travel_participants(travel_ids UUID[])
+RETURNS TABLE (travel_id UUID, user_id UUID)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  -- SECURITY DEFINER이므로 RLS를 우회하여 직접 조회
+  RETURN QUERY
+  SELECT tp.travel_id, tp.user_id
+  FROM travel_participants tp
+  WHERE tp.travel_id = ANY(travel_ids)
+  AND EXISTS (
+    -- travels 정책을 통과한 여행인지 확인
+    SELECT 1 FROM travels t
+    WHERE t.id = tp.travel_id
+    AND (
+      t.created_by = auth.uid() OR
+      EXISTS (
+        SELECT 1 FROM travel_participants tp2
+        WHERE tp2.travel_id = t.id
+        AND tp2.user_id = auth.uid()
+      )
+    )
+  );
+END;
+$$;
+
+-- 함수에 대한 권한 부여
+GRANT EXECUTE ON FUNCTION get_travel_participants(UUID[]) TO authenticated;
 
 -- 완료 메시지
 DO $$

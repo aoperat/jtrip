@@ -222,7 +222,7 @@ function App() {
     setSelectedTripId(trip.id);
     navigateToView("detail");
     setActiveTab("schedule");
-    setSelectedDay(1);
+    setSelectedDay("all");
     setCheckedItems(new Set());
   };
 
@@ -345,12 +345,22 @@ function App() {
                   <div className="p-4 flex justify-between items-center bg-white">
                     <div className="flex -space-x-2">
                       {trip.participants.map((p, i) => (
-                        <img
+                        <div
                           key={i}
-                          className="w-8 h-8 rounded-full border-2 border-white shadow-sm"
-                          src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.image}`}
-                          alt={p.name}
-                        />
+                          className="w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold"
+                          title={p.name}
+                        >
+                          {typeof p.image === "string" &&
+                          p.image.startsWith("http") ? (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="w-full h-full rounded-full object-cover"
+                            />
+                          ) : (
+                            p.image || p.name?.charAt(0)?.toUpperCase() || "U"
+                          )}
+                        </div>
                       ))}
                     </div>
                     <ChevronRight className="w-5 h-5 text-slate-200" />
@@ -392,12 +402,22 @@ function App() {
             <div className="flex items-center gap-2">
               <div className="flex -space-x-3">
                 {selectedTripData.participants?.map((p, i) => (
-                  <img
+                  <div
                     key={i}
-                    className="w-9 h-9 rounded-full border-2 border-white shadow-md bg-slate-100"
-                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.image}`}
-                    alt={p.name}
-                  />
+                    className="w-9 h-9 rounded-full border-2 border-white shadow-md bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold"
+                    title={p.name}
+                  >
+                    {typeof p.image === "string" &&
+                    p.image.startsWith("http") ? (
+                      <img
+                        src={p.image}
+                        alt={p.name}
+                        className="w-full h-full rounded-full object-cover"
+                      />
+                    ) : (
+                      p.image || p.name?.charAt(0)?.toUpperCase() || "U"
+                    )}
+                  </div>
                 ))}
               </div>
               <button
@@ -456,19 +476,31 @@ function App() {
 
                 <div className="flex gap-2.5 px-6 py-5 overflow-x-auto no-scrollbar border-b border-slate-100 sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-md z-40">
                   {travelDays.length > 0 ? (
-                    travelDays.map((dayInfo) => (
+                    <>
                       <button
-                        key={dayInfo.day}
-                        onClick={() => setSelectedDay(dayInfo.day)}
+                        onClick={() => setSelectedDay("all")}
                         className={`flex-shrink-0 min-w-[80px] px-6 py-3 rounded-2xl text-[11px] font-black transition-all ${
-                          selectedDay === dayInfo.day
+                          selectedDay === "all"
                             ? "bg-slate-900 text-white shadow-xl shadow-slate-200"
                             : "bg-white text-slate-400 border border-slate-100"
                         }`}
                       >
-                        DAY {dayInfo.day}
+                        전체
                       </button>
-                    ))
+                      {travelDays.map((dayInfo) => (
+                        <button
+                          key={dayInfo.day}
+                          onClick={() => setSelectedDay(dayInfo.day)}
+                          className={`flex-shrink-0 min-w-[80px] px-6 py-3 rounded-2xl text-[11px] font-black transition-all ${
+                            selectedDay === dayInfo.day
+                              ? "bg-slate-900 text-white shadow-xl shadow-slate-200"
+                              : "bg-white text-slate-400 border border-slate-100"
+                          }`}
+                        >
+                          DAY {dayInfo.day}
+                        </button>
+                      ))}
+                    </>
                   ) : (
                     <div className="text-xs text-slate-400 px-4">
                       날짜 정보가 없습니다.
@@ -485,8 +517,146 @@ function App() {
                           일정을 불러오는 중...
                         </p>
                       </div>
+                    ) : selectedDay === "all" ? (
+                      // 전체 날짜 보기
+                      travelDays.length > 0 ? (
+                        travelDays.map((dayInfo) => {
+                          const dayItems =
+                            selectedTripData?.itinerary?.[dayInfo.day] || [];
+                          if (dayItems.length === 0) return null;
+
+                          return (
+                            <div key={dayInfo.day} className="space-y-4">
+                              <div className="sticky top-0 bg-[#F8FAFC] z-10 pb-2 pt-2 -mt-2">
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">
+                                  DAY {dayInfo.day} · {dayInfo.dateString}
+                                </h3>
+                              </div>
+                              {dayItems.map((item) => {
+                                const isChecked =
+                                  checkedItems.has(item.id) || item.is_checked;
+                                const linkedExpense =
+                                  selectedTripData.expenses?.find(
+                                    (ex) => ex.linkedItineraryId === item.id
+                                  );
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="relative pl-8 flex items-start gap-3 animate-in slide-in-from-bottom-2"
+                                  >
+                                    <button
+                                      onClick={() => toggleItemCheck(item.id)}
+                                      className={`absolute left-0 top-2 w-[24px] h-[24px] rounded-full bg-white flex items-center justify-center z-10 transition-all border-2 ${
+                                        isChecked
+                                          ? "bg-blue-600 border-blue-600"
+                                          : "border-slate-300"
+                                      }`}
+                                    >
+                                      {isChecked && (
+                                        <CheckCircle2 className="w-4 h-4 text-white" />
+                                      )}
+                                    </button>
+                                    <div
+                                      onClick={() =>
+                                        setSelectedItineraryItem(item)
+                                      }
+                                      className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 ${
+                                        isChecked
+                                          ? "opacity-40 bg-slate-50 border-slate-100"
+                                          : "bg-white shadow-sm border-slate-100"
+                                      }`}
+                                    >
+                                      <div className="flex-1 overflow-hidden">
+                                        <div className="flex justify-between items-start mb-1">
+                                          <span
+                                            className={`text-[10px] font-bold uppercase tracking-widest ${
+                                              isChecked
+                                                ? "text-slate-300"
+                                                : "text-blue-500"
+                                            }`}
+                                          >
+                                            {item.time}
+                                          </span>
+                                          <div className="flex flex-wrap justify-end gap-1 max-w-[150px]">
+                                            {item.hasTicket && (
+                                              <LinkedBadge
+                                                color="orange"
+                                                icon={Ticket}
+                                                label="TICKET"
+                                                onClick={() =>
+                                                  setActiveTab("tickets")
+                                                }
+                                              />
+                                            )}
+                                            {item.prepId && (
+                                              <LinkedBadge
+                                                color="blue"
+                                                icon={CheckSquare}
+                                                label="PREP"
+                                                onClick={() =>
+                                                  setActiveTab("preps")
+                                                }
+                                              />
+                                            )}
+                                            {item.infoId && (
+                                              <LinkedBadge
+                                                color="slate"
+                                                icon={Info}
+                                                label="INFO"
+                                                onClick={() =>
+                                                  setActiveTab("info")
+                                                }
+                                              />
+                                            )}
+                                            {linkedExpense && (
+                                              <LinkedBadge
+                                                color="green"
+                                                icon={DollarSign}
+                                                label={`₩${linkedExpense.amount.toLocaleString()}`}
+                                                onClick={() =>
+                                                  setActiveTab("budget")
+                                                }
+                                              />
+                                            )}
+                                          </div>
+                                        </div>
+                                        <h3
+                                          className={`font-bold text-sm leading-tight ${
+                                            isChecked
+                                              ? "text-slate-400 line-through"
+                                              : "text-slate-800"
+                                          }`}
+                                        >
+                                          {item.title}
+                                        </h3>
+                                        <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                                          {item.desc}
+                                        </p>
+                                      </div>
+                                      {item.image && (
+                                        <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group/img">
+                                          <img
+                                            src={item.image}
+                                            alt={item.title}
+                                            className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
+                                          />
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })
+                      ) : (
+                        <div className="py-20 text-center text-slate-300 text-xs font-bold uppercase tracking-widest tracking-tighter">
+                          일정이 등록되지 않았습니다.
+                        </div>
+                      )
                     ) : selectedTripData?.itinerary?.[selectedDay]?.length >
                       0 ? (
+                      // 특정 날짜 보기
                       selectedTripData.itinerary[selectedDay].map((item) => {
                         const isChecked =
                           checkedItems.has(item.id) || item.is_checked;
@@ -512,69 +682,80 @@ function App() {
                             </button>
                             <div
                               onClick={() => setSelectedItineraryItem(item)}
-                              className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] ${
+                              className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 ${
                                 isChecked
                                   ? "opacity-40 bg-slate-50 border-slate-100"
                                   : "bg-white shadow-sm border-slate-100"
                               }`}
                             >
-                              <div className="flex justify-between items-start mb-1">
-                                <span
-                                  className={`text-[10px] font-bold uppercase tracking-widest ${
+                              <div className="flex-1 overflow-hidden">
+                                <div className="flex justify-between items-start mb-1">
+                                  <span
+                                    className={`text-[10px] font-bold uppercase tracking-widest ${
+                                      isChecked
+                                        ? "text-slate-300"
+                                        : "text-blue-500"
+                                    }`}
+                                  >
+                                    {item.time}
+                                  </span>
+                                  <div className="flex flex-wrap justify-end gap-1 max-w-[150px]">
+                                    {item.hasTicket && (
+                                      <LinkedBadge
+                                        color="orange"
+                                        icon={Ticket}
+                                        label="TICKET"
+                                        onClick={() => setActiveTab("tickets")}
+                                      />
+                                    )}
+                                    {item.prepId && (
+                                      <LinkedBadge
+                                        color="blue"
+                                        icon={CheckSquare}
+                                        label="PREP"
+                                        onClick={() => setActiveTab("preps")}
+                                      />
+                                    )}
+                                    {item.infoId && (
+                                      <LinkedBadge
+                                        color="slate"
+                                        icon={Info}
+                                        label="INFO"
+                                        onClick={() => setActiveTab("info")}
+                                      />
+                                    )}
+                                    {linkedExpense && (
+                                      <LinkedBadge
+                                        color="green"
+                                        icon={DollarSign}
+                                        label={`₩${linkedExpense.amount.toLocaleString()}`}
+                                        onClick={() => setActiveTab("budget")}
+                                      />
+                                    )}
+                                  </div>
+                                </div>
+                                <h3
+                                  className={`font-bold text-sm leading-tight ${
                                     isChecked
-                                      ? "text-slate-300"
-                                      : "text-blue-500"
+                                      ? "text-slate-400 line-through"
+                                      : "text-slate-800"
                                   }`}
                                 >
-                                  {item.time}
-                                </span>
-                                <div className="flex flex-wrap justify-end gap-1 max-w-[150px]">
-                                  {item.hasTicket && (
-                                    <LinkedBadge
-                                      color="orange"
-                                      icon={Ticket}
-                                      label="TICKET"
-                                      onClick={() => setActiveTab("tickets")}
-                                    />
-                                  )}
-                                  {item.prepId && (
-                                    <LinkedBadge
-                                      color="blue"
-                                      icon={CheckSquare}
-                                      label="PREP"
-                                      onClick={() => setActiveTab("preps")}
-                                    />
-                                  )}
-                                  {item.infoId && (
-                                    <LinkedBadge
-                                      color="slate"
-                                      icon={Info}
-                                      label="INFO"
-                                      onClick={() => setActiveTab("info")}
-                                    />
-                                  )}
-                                  {linkedExpense && (
-                                    <LinkedBadge
-                                      color="green"
-                                      icon={DollarSign}
-                                      label={`₩${linkedExpense.amount.toLocaleString()}`}
-                                      onClick={() => setActiveTab("budget")}
-                                    />
-                                  )}
-                                </div>
+                                  {item.title}
+                                </h3>
+                                <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                                  {item.desc}
+                                </p>
                               </div>
-                              <h3
-                                className={`font-bold text-sm leading-tight ${
-                                  isChecked
-                                    ? "text-slate-400 line-through"
-                                    : "text-slate-800"
-                                }`}
-                              >
-                                {item.title}
-                              </h3>
-                              <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">
-                                {item.desc}
-                              </p>
+                              {item.image && (
+                                <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group/img">
+                                  <img
+                                    src={item.image}
+                                    alt={item.title}
+                                    className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
+                                  />
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -588,7 +769,11 @@ function App() {
                 ) : (
                   <MapView
                     itineraryItems={
-                      selectedTripData?.itinerary?.[selectedDay] || []
+                      selectedDay === "all"
+                        ? Object.values(
+                            selectedTripData?.itinerary || {}
+                          ).flat()
+                        : selectedTripData?.itinerary?.[selectedDay] || []
                     }
                     selectedDay={selectedDay}
                   />
@@ -1181,11 +1366,21 @@ function App() {
                         }`}
                       >
                         <div className="relative">
-                          <img
-                            className="w-10 h-10 rounded-full bg-white shadow-sm"
-                            src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.image}`}
-                            alt={p.name}
-                          />
+                          <div
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-sm"
+                            title={p.name}
+                          >
+                            {typeof p.image === "string" &&
+                            p.image.startsWith("http") ? (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-full h-full rounded-full object-cover"
+                              />
+                            ) : (
+                              p.image || p.name?.charAt(0)?.toUpperCase() || "U"
+                            )}
+                          </div>
                           {reg && (
                             <div className="absolute -top-1 -right-1 bg-blue-500 rounded-full border border-white p-0.5">
                               <CheckCircle2 className="w-2 h-2 text-white" />
@@ -1354,6 +1549,7 @@ function App() {
               address: updates.address,
               latitude: updates.latitude,
               longitude: updates.longitude,
+              image_url: updates.imageUrl || null,
             });
           }}
           onDelete={async () => {
