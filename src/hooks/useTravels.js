@@ -42,42 +42,46 @@ export function useTravels() {
         return;
       }
 
-      // 1단계: 자신이 생성한 여행 가져오기
-      const { data: createdTravels, error: createdError } = await supabase
-        .from('travels')
-        .select('*')
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false });
-
-      if (createdError) throw createdError;
-
-      // 2단계: 자신이 참여한 여행의 ID 가져오기
+      // 1단계: 자신이 참여한 여행의 ID 가져오기 (먼저 확인)
       const { data: participantRecords, error: participantError } = await supabase
         .from('travel_participants')
         .select('travel_id')
         .eq('user_id', user.id);
 
-      if (participantError) throw participantError;
-
-      // 3단계: 참여한 여행 가져오기 (중복 제거)
-      const participantTravelIds = participantRecords
-        ?.map(r => r.travel_id)
-        .filter(id => !createdTravels?.some(t => t.id === id)) || [];
-
-      let participatedTravels = [];
-      if (participantTravelIds.length > 0) {
-        const { data, error } = await supabase
-          .from('travels')
-          .select('*')
-          .in('id', participantTravelIds)
-          .order('created_at', { ascending: false });
-        
-        if (error) throw error;
-        participatedTravels = data || [];
+      if (participantError) {
+        console.error('참여자 레코드 조회 실패:', participantError);
+        throw participantError;
       }
 
-      // 4단계: 두 결과 합치기
-      const allTravels = [...(createdTravels || []), ...participatedTravels];
+      // 2단계: 참여한 모든 여행 ID 수집
+      const allParticipantTravelIds = (participantRecords || []).map(r => r.travel_id);
+      
+      // 3단계: 참여한 여행 가져오기 (RLS 정책을 통과하기 위해 참여자 테이블을 통해 조회)
+      let allTravels = [];
+      if (allParticipantTravelIds.length > 0) {
+        // 참여한 여행들을 가져오기
+        const { data: participatedTravels, error: travelsError } = await supabase
+          .from('travels')
+          .select('*')
+          .in('id', allParticipantTravelIds)
+          .order('created_at', { ascending: false });
+        
+        if (travelsError) {
+          console.error('여행 조회 실패:', travelsError);
+          throw travelsError;
+        }
+        
+        allTravels = participatedTravels || [];
+      }
+
+      // 4단계: 여행이 없으면 빈 배열 반환
+      if (allTravels.length === 0) {
+        setTravels([]);
+        setError(null);
+        setLoading(false);
+        return;
+      }
+
       const travelIds = allTravels.map(t => t.id);
 
       // 5단계: 모든 여행의 참여자 가져오기
@@ -232,38 +236,47 @@ export function useTravels() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('로그인이 필요합니다.');
 
-      // 이메일로 사용자 찾기
+      // profiles 테이블에서 이메일로 사용자 찾기
       const { data: profiles, error: profileError } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, email')
         .eq('email', email)
-        .single();
+        .maybeSingle();
 
-      if (profileError || !profiles) {
-        throw new Error('해당 이메일의 사용자를 찾을 수 없습니다.');
-      }
+      // 사용자가 존재하는 경우
+      if (profiles && !profileError) {
+        // 참여자 추가
+        const { error: addError } = await supabase
+          .from('travel_participants')
+          .insert({
+            travel_id: travelId,
+            user_id: profiles.id,
+          });
 
-      // 참여자 추가
-      const { error: addError } = await supabase
-        .from('travel_participants')
-        .insert({
-          travel_id: travelId,
-          user_id: profiles.id,
-        });
-
-      if (addError) {
-        if (addError.code === '23505') {
-          throw new Error('이미 참여 중인 사용자입니다.');
+        if (addError) {
+          if (addError.code === '23505') {
+            throw new Error('이미 참여 중인 사용자입니다.');
+          }
+          throw addError;
         }
-        throw addError;
+
+        await fetchTravels();
+        return { error: null, type: 'user' }; // 사용자 초대 성공
       }
 
-      await fetchTravels();
-      return { error: null };
+      // 사용자가 없는 경우 - 초대 링크 생성
+      return { error: null, type: 'invite_link', email };
     } catch (err) {
       console.error('참여자 추가 실패:', err);
       return { error: err };
     }
+  };
+
+  const createInviteLink = (travelId, email) => {
+    // 간단한 토큰 생성 (실제로는 더 안전한 방법 사용 권장)
+    const token = btoa(`${travelId}:${email}:${Date.now()}`).replace(/[+/=]/g, '');
+    const inviteUrl = `${window.location.origin}/invite?token=${token}&travel=${travelId}&email=${encodeURIComponent(email)}`;
+    return inviteUrl;
   };
 
   return {
@@ -274,6 +287,7 @@ export function useTravels() {
     updateTravel,
     deleteTravel,
     addParticipant,
+    createInviteLink,
     refetch: fetchTravels,
   };
 }

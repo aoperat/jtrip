@@ -55,6 +55,7 @@ function App() {
     loading: travelsLoading,
     createTravel,
     addParticipant,
+    createInviteLink,
   } = useTravels();
 
   const [view, setView] = useState("home");
@@ -85,6 +86,8 @@ function App() {
   const [showEditItineraryModal, setShowEditItineraryModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedItineraryItem, setSelectedItineraryItem] = useState(null);
+  const [inviteLink, setInviteLink] = useState(null);
+  const [inviteEmail, setInviteEmail] = useState(null);
 
   // 선택된 여행의 데이터 훅
   const {
@@ -1372,65 +1375,146 @@ function App() {
             <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
               사용자 초대 👥
             </h2>
-            <form
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const email = formData.get("email");
 
-                if (!email) {
-                  alert("이메일을 입력해주세요.");
-                  return;
-                }
+            {inviteLink ? (
+              // 초대 링크 표시
+              <div className="space-y-6">
+                <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
+                  <p className="text-sm font-bold text-blue-900 mb-3">
+                    초대 링크가 생성되었습니다! 📧
+                  </p>
+                  <p className="text-xs text-blue-700 mb-4">
+                    {inviteEmail}로 초대 링크를 보내주세요.
+                  </p>
+                  <div className="bg-white p-4 rounded-xl border border-blue-200 mb-4">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">
+                      초대 링크
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={inviteLink}
+                        className="flex-1 bg-slate-50 border-none rounded-lg px-3 py-2 text-xs font-mono text-slate-700"
+                        onClick={(e) => e.target.select()}
+                      />
+                      <button
+                        onClick={async () => {
+                          try {
+                            await navigator.clipboard.writeText(inviteLink);
+                            addNotification("초대 링크가 복사되었습니다!");
+                          } catch (err) {
+                            // 폴백: 텍스트 선택
+                            const input =
+                              document.querySelector("input[readonly]");
+                            if (input) {
+                              input.select();
+                              document.execCommand("copy");
+                              addNotification("초대 링크가 복사되었습니다!");
+                            }
+                          }
+                        }}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold active:scale-95 transition-all"
+                      >
+                        복사
+                      </button>
+                    </div>
+                  </div>
+                  <a
+                    href={`mailto:${inviteEmail}?subject=${encodeURIComponent(
+                      `${selectedTripData.title} 여행 초대`
+                    )}&body=${encodeURIComponent(
+                      `안녕하세요!\n\n${selectedTripData.title} 여행에 초대합니다.\n\n아래 링크를 클릭하여 참여하세요:\n${inviteLink}`
+                    )}`}
+                    className="block w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold text-center active:scale-95 transition-all"
+                  >
+                    이메일로 보내기 📧
+                  </a>
+                </div>
+                <button
+                  onClick={() => {
+                    setInviteLink(null);
+                    setInviteEmail(null);
+                  }}
+                  className="w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
+                >
+                  닫기
+                </button>
+              </div>
+            ) : (
+              // 초대 폼
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target);
+                  const email = formData.get("email");
 
-                try {
-                  const result = await addParticipant(selectedTripId, email);
-
-                  if (result.error) {
-                    alert("초대 실패: " + result.error.message);
-                  } else {
-                    addNotification("사용자가 초대되었습니다.");
-                    setShowInviteModal(false);
+                  if (!email) {
+                    alert("이메일을 입력해주세요.");
+                    return;
                   }
-                } catch (error) {
-                  alert("오류가 발생했습니다: " + error.message);
-                }
-              }}
-              className="space-y-4 mb-10"
-            >
-              <div>
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-                  이메일 주소
-                </label>
-                <input
-                  name="email"
-                  type="email"
-                  autoFocus
-                  required
-                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="user@example.com"
-                />
-                <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
-                  * 초대할 사용자의 이메일 주소를 입력하세요.
-                </p>
-              </div>
 
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="button"
-                  onClick={() => setShowInviteModal(false)}
-                  className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
-                >
-                  초대하기
-                </button>
-              </div>
-            </form>
+                  try {
+                    const result = await addParticipant(selectedTripId, email);
+
+                    if (result.error) {
+                      alert("초대 실패: " + result.error.message);
+                    } else if (result.type === "user") {
+                      // 사용자 초대 성공
+                      addNotification("사용자가 초대되었습니다.");
+                      setShowInviteModal(false);
+                    } else if (result.type === "invite_link") {
+                      // 초대 링크 생성
+                      const link = createInviteLink(selectedTripId, email);
+                      setInviteLink(link);
+                      setInviteEmail(email);
+                    }
+                  } catch (error) {
+                    alert("오류가 발생했습니다: " + error.message);
+                  }
+                }}
+                className="space-y-4 mb-10"
+              >
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    이메일 주소
+                  </label>
+                  <input
+                    name="email"
+                    type="email"
+                    autoFocus
+                    required
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="user@example.com"
+                  />
+                  <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
+                    * 등록된 사용자는 즉시 초대되고,
+                    <br />
+                    등록되지 않은 이메일은 초대 링크가 생성됩니다.
+                  </p>
+                </div>
+
+                <div className="flex gap-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInviteModal(false);
+                      setInviteLink(null);
+                      setInviteEmail(null);
+                    }}
+                    className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
+                  >
+                    취소
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
+                  >
+                    초대하기
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}

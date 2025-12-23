@@ -36,30 +36,70 @@ export default function SettingsView({ user, onClose, onSignOut }) {
     if (!user) return;
     
     setIsLoading(true);
+    setError(''); // 에러 초기화
     try {
       // 이메일은 auth.users에서 가져오기
       setEmail(user.email || '');
       
-      // 프로필 정보 가져오기
-      const { data, error: profileError } = await getProfile();
+      // 프로필 정보 직접 가져오기 (useAuth의 user 상태와 동기화 문제 방지)
+      const { data, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
       if (profileError) {
-        // 프로필이 없으면 생성
-        if (profileError.code === 'PGRST116') {
-          const { error: createError } = await updateProfile({
-            nickname: user.email?.split('@')[0] || 'User',
-          });
-          if (!createError) {
-            setNickname(user.email?.split('@')[0] || 'User');
+        // 프로필이 없으면 생성 (PGRST116은 "no rows returned" 에러 코드)
+        const isProfileNotFound = 
+          profileError.code === 'PGRST116' || 
+          profileError.code === '42P01' ||
+          profileError.message?.includes('No rows') ||
+          profileError.message?.includes('not found');
+        
+        if (isProfileNotFound) {
+          // 프로필이 없으면 직접 INSERT
+          const defaultNickname = user.email?.split('@')[0] || 'User';
+          const { error: createError } = await supabase
+            .from('profiles')
+            .insert({
+              id: user.id,
+              nickname: defaultNickname,
+            });
+          
+          if (createError) {
+            console.error('프로필 생성 실패:', createError);
+            // 생성 실패해도 기본값으로 설정
+            setNickname(defaultNickname);
+            setError('프로필 생성 중 오류가 발생했습니다. 기본 정보로 표시됩니다.');
+          } else {
+            // 생성 성공하면 다시 조회
+            setNickname(defaultNickname);
+            const { data: newProfile, error: fetchError } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', user.id)
+              .single();
+            if (newProfile && !fetchError) {
+              setAvatarUrl(newProfile.avatar_url || '');
+            }
           }
         } else {
+          // 다른 에러인 경우
+          console.error('프로필 조회 오류:', profileError);
           setError('프로필을 불러오는데 실패했습니다.');
+          // 기본값이라도 설정
+          setNickname(user.email?.split('@')[0] || 'User');
         }
       } else {
+        // 프로필이 있는 경우
         setNickname(data?.nickname || user.email?.split('@')[0] || 'User');
         setAvatarUrl(data?.avatar_url || '');
       }
     } catch (err) {
+      console.error('프로필 로딩 중 예외 발생:', err);
       setError('오류가 발생했습니다.');
+      // 에러가 발생해도 기본값은 설정
+      setNickname(user.email?.split('@')[0] || 'User');
     } finally {
       setIsLoading(false);
     }
