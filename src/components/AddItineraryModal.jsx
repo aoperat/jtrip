@@ -1,0 +1,166 @@
+import { useState } from "react";
+import PlaceSearchInput from "./PlaceSearchInput";
+
+export default function AddItineraryModal({
+  selectedTripData,
+  travelDays,
+  createItineraryItem,
+  addNotification,
+  setShowAddItineraryModal,
+  setSelectedDay,
+}) {
+  const [locationData, setLocationData] = useState(null);
+
+  const handlePlaceSelect = (data) => {
+    setLocationData(data);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const day = parseInt(formData.get("day"));
+    const time = formData.get("time");
+    const title = formData.get("title");
+    const description = formData.get("description") || "";
+
+    if (!day || !title) {
+      alert("일차와 제목을 입력해주세요.");
+      return;
+    }
+
+    try {
+      const result = await createItineraryItem({
+        day,
+        time: time || null,
+        title,
+        description,
+        locationName: locationData?.locationName || null,
+        address: locationData?.address || null,
+        latitude: locationData?.latitude || null,
+        longitude: locationData?.longitude || null,
+      });
+
+      if (result.error) {
+        alert("일정 생성 실패: " + result.error.message);
+      } else {
+        addNotification("일정이 추가되었습니다.");
+        setShowAddItineraryModal(false);
+        setSelectedDay(day);
+        setLocationData(null);
+      }
+    } catch (error) {
+      alert("오류가 발생했습니다: " + error.message);
+    }
+  };
+
+  return (
+    <div className="absolute inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
+      <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
+        <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
+          일정 추가 📅
+        </h2>
+        <form onSubmit={handleSubmit} className="space-y-4 mb-10">
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+              일차
+            </label>
+            <select
+              name="day"
+              required
+              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
+            >
+              <option value="">일차 선택</option>
+              {travelDays.map((dayInfo) => (
+                <option key={dayInfo.day} value={dayInfo.day}>
+                  Day {dayInfo.day} ({dayInfo.dateString})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+              시간 (선택)
+            </label>
+            <input
+              name="time"
+              type="time"
+              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+              제목
+            </label>
+            <input
+              name="title"
+              autoFocus
+              required
+              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="예: 인천공항 출발"
+            />
+          </div>
+
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+              설명 (선택)
+            </label>
+            <textarea
+              name="description"
+              rows={3}
+              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+              placeholder="상세 설명을 입력하세요"
+            />
+          </div>
+
+          <div className="border-t border-slate-100 pt-4 space-y-4">
+            <p className="text-xs font-bold text-slate-600 mb-3">📍 장소 정보 (맵 표시용)</p>
+            
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                장소 검색
+              </label>
+              <PlaceSearchInput
+                onPlaceSelect={handlePlaceSelect}
+                placeholder="장소명을 입력하세요 (예: 인천국제공항, Tokyo Station)"
+              />
+            </div>
+
+            {locationData && (
+              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                <p className="text-xs font-bold text-blue-600 mb-2">선택된 장소:</p>
+                <p className="text-sm font-bold text-slate-800 mb-1">{locationData.locationName}</p>
+                <p className="text-xs text-slate-600">{locationData.address}</p>
+                <p className="text-[10px] text-slate-400 mt-2">
+                  좌표: {locationData.latitude.toFixed(6)}, {locationData.longitude.toFixed(6)}
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="button"
+              onClick={() => {
+                setShowAddItineraryModal(false);
+                setLocationData(null);
+              }}
+              className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
+            >
+              취소
+            </button>
+            <button
+              type="submit"
+              className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
+            >
+              추가하기
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
