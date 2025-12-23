@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { LogIn, Mail, Lock, UserPlus, AlertCircle } from 'lucide-react';
+import { LogIn, Mail, Lock, UserPlus, AlertCircle, User } from 'lucide-react';
 
 export default function AuthGuard({ children }) {
   const { user, loading, signIn, signUp } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
+  const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -17,11 +19,35 @@ export default function AuthGuard({ children }) {
 
     try {
       if (isSignUp) {
-        const { error: signUpError } = await signUp(email, password);
+        // 회원가입 검증
+        if (!nickname || nickname.trim().length < 2) {
+          setError('닉네임은 2자 이상 입력해주세요.');
+          setIsLoading(false);
+          return;
+        }
+        
+        if (password.length < 6) {
+          setError('비밀번호는 6자 이상 입력해주세요.');
+          setIsLoading(false);
+          return;
+        }
+        
+        if (password !== passwordConfirm) {
+          setError('비밀번호가 일치하지 않습니다.');
+          setIsLoading(false);
+          return;
+        }
+        
+        const { error: signUpError } = await signUp(email, password, nickname.trim());
         if (signUpError) {
           setError(signUpError.message);
         } else {
           setError('회원가입이 완료되었습니다! 이메일을 확인해주세요.');
+          // 폼 초기화
+          setEmail('');
+          setPassword('');
+          setPasswordConfirm('');
+          setNickname('');
         }
       } else {
         const { error: signInError } = await signIn(email, password);
@@ -64,9 +90,12 @@ export default function AuthGuard({ children }) {
           <div className="bg-white rounded-[32px] p-6 shadow-lg border border-slate-100">
             <div className="flex gap-2 mb-6 bg-slate-50 p-1 rounded-xl">
               <button
+                type="button"
                 onClick={() => {
                   setIsSignUp(false);
                   setError('');
+                  setNickname('');
+                  setPasswordConfirm('');
                 }}
                 className={`flex-1 py-2 rounded-lg font-bold text-sm transition-all ${
                   !isSignUp
@@ -77,6 +106,7 @@ export default function AuthGuard({ children }) {
                 로그인
               </button>
               <button
+                type="button"
                 onClick={() => {
                   setIsSignUp(true);
                   setError('');
@@ -109,6 +139,30 @@ export default function AuthGuard({ children }) {
                 </div>
               </div>
 
+              {isSignUp && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-2">
+                    닉네임
+                  </label>
+                  <div className="relative">
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                    <input
+                      type="text"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      placeholder="닉네임을 입력하세요"
+                      required={isSignUp}
+                      minLength={2}
+                      maxLength={20}
+                      className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                    2자 이상 20자 이하로 입력해주세요
+                  </p>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-bold text-slate-600 mb-2">
                   비밀번호
@@ -125,7 +179,41 @@ export default function AuthGuard({ children }) {
                     className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   />
                 </div>
+                {isSignUp && (
+                  <p className="text-[10px] text-slate-400 mt-1 ml-1">
+                    6자 이상 입력해주세요
+                  </p>
+                )}
               </div>
+
+              {isSignUp && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-600 mb-2">
+                    비밀번호 확인
+                  </label>
+                  <div className="relative">
+                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-300" />
+                    <input
+                      type="password"
+                      value={passwordConfirm}
+                      onChange={(e) => setPasswordConfirm(e.target.value)}
+                      placeholder="비밀번호를 다시 입력하세요"
+                      required={isSignUp}
+                      minLength={6}
+                      className={`w-full pl-12 pr-4 py-3 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                        passwordConfirm && password !== passwordConfirm
+                          ? 'border-red-300 focus:ring-red-500'
+                          : 'border-slate-200'
+                      }`}
+                    />
+                  </div>
+                  {passwordConfirm && password !== passwordConfirm && (
+                    <p className="text-[10px] text-red-500 mt-1 ml-1">
+                      비밀번호가 일치하지 않습니다
+                    </p>
+                  )}
+                </div>
+              )}
 
               {error && (
                 <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl">

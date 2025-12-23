@@ -29,6 +29,7 @@ import {
   Megaphone,
   Navigation,
   Search,
+  Loader2,
 } from "lucide-react";
 import NavButton from "./components/NavButton";
 import LinkedBadge from "./components/LinkedBadge";
@@ -38,6 +39,7 @@ import AddItineraryModal from "./components/AddItineraryModal";
 import EditItineraryModal from "./components/EditItineraryModal";
 import ItineraryDetailModal from "./components/ItineraryDetailModal";
 import MapView from "./components/MapView";
+import SettingsView from "./components/SettingsView";
 import { useTravels } from "./hooks/useTravels";
 import { useItinerary } from "./hooks/useItinerary";
 import { useTickets } from "./hooks/useTickets";
@@ -47,7 +49,7 @@ import { useSharedInfo } from "./hooks/useSharedInfo";
 import { useAuth } from "./hooks/useAuth";
 
 function App() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const {
     travels,
     loading: travelsLoading,
@@ -69,6 +71,9 @@ function App() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadTargetUser, setUploadTargetUser] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [travelImagePreview, setTravelImagePreview] = useState("");
+  const [travelImageFile, setTravelImageFile] = useState(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
 
   // Registration Modals
   const [showAddTicketModal, setShowAddTicketModal] = useState(false);
@@ -249,7 +254,10 @@ function App() {
               <button className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors">
                 <Search className="w-5 h-5" />
               </button>
-              <button className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors">
+              <button
+                onClick={() => setView("settings")}
+                className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"
+              >
                 <Settings className="w-5 h-5" />
               </button>
             </div>
@@ -279,11 +287,29 @@ function App() {
                   className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-all cursor-pointer group"
                 >
                   <div className="h-36 relative">
-                    <img
-                      src={trip.image}
-                      alt={trip.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                    />
+                    {trip.image ? (
+                      <img
+                        src={trip.image}
+                        alt={trip.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          e.target.nextElementSibling.style.display = "flex";
+                        }}
+                      />
+                    ) : null}
+                    <div
+                      className={`w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center ${
+                        trip.image ? "hidden" : ""
+                      }`}
+                    >
+                      <div className="text-center text-white">
+                        <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-80" />
+                        <p className="text-xs font-bold opacity-60">
+                          {trip.title}
+                        </p>
+                      </div>
+                    </div>
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                     <div className="absolute bottom-4 left-4 text-white">
                       <h3 className="text-xl font-bold">{trip.title}</h3>
@@ -942,6 +968,18 @@ function App() {
         </div>
       )}
 
+      {/* -------------------- VIEW: SETTINGS -------------------- */}
+      {view === "settings" && (
+        <SettingsView
+          user={user}
+          onClose={() => setView("home")}
+          onSignOut={async () => {
+            await signOut();
+            setView("home");
+          }}
+        />
+      )}
+
       {/* -------------------- OVERLAY: NOTIFICATIONS -------------------- */}
       <div className="absolute top-24 left-0 right-0 px-4 z-[100] pointer-events-none">
         {notifications.map((n) => (
@@ -1390,9 +1428,7 @@ function App() {
                 const title = formData.get("title");
                 const startDate = formData.get("startDate");
                 const endDate = formData.get("endDate");
-                const imageUrl =
-                  formData.get("imageUrl") ||
-                  "https://images.unsplash.com/photo-1540959733332-e94e270b4052?w=800&q=80";
+                let imageUrl = formData.get("imageUrl") || "";
 
                 if (!title || !startDate || !endDate) {
                   alert("모든 필드를 입력해주세요.");
@@ -1400,6 +1436,28 @@ function App() {
                 }
 
                 try {
+                  // 이미지 파일이 있으면 업로드
+                  if (travelImageFile) {
+                    setIsUploadingImage(true);
+                    const { data: uploadData, error: uploadError } =
+                      await uploadTravelImage(travelImageFile, user.id);
+
+                    if (uploadError) {
+                      alert("이미지 업로드 실패: " + uploadError.message);
+                      setIsUploadingImage(false);
+                      return;
+                    }
+
+                    imageUrl = uploadData.publicUrl;
+                    setIsUploadingImage(false);
+                  }
+
+                  // 이미지 URL이 없으면 기본 이미지 사용
+                  if (!imageUrl) {
+                    imageUrl =
+                      "https://images.unsplash.com/photo-1540959733332-e94e270b4052?w=800&q=80";
+                  }
+
                   const result = await createTravel({
                     title,
                     start_date: startDate,
@@ -1412,6 +1470,8 @@ function App() {
                   } else {
                     addNotification("여행이 생성되었습니다.");
                     setShowCreateTripModal(false);
+                    setTravelImagePreview("");
+                    setTravelImageFile(null);
                     if (result.data) {
                       openTrip({
                         id: result.data.id,
@@ -1424,6 +1484,7 @@ function App() {
                   }
                 } catch (error) {
                   alert("오류가 발생했습니다: " + error.message);
+                  setIsUploadingImage(false);
                 }
               }}
               className="space-y-4 mb-10"
@@ -1468,14 +1529,74 @@ function App() {
 
               <div>
                 <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-                  대표 이미지 URL (선택)
+                  대표 이미지 (선택)
                 </label>
+
+                {/* 이미지 미리보기 */}
+                {travelImagePreview && (
+                  <div className="relative mb-3 rounded-2xl overflow-hidden">
+                    <img
+                      src={travelImagePreview}
+                      alt="미리보기"
+                      className="w-full h-48 object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTravelImagePreview("");
+                        setTravelImageFile(null);
+                      }}
+                      className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* 파일 업로드 버튼 */}
+                <div className="flex gap-2 mb-2">
+                  <label className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // 파일 크기 체크
+                          if (file.size > 10 * 1024 * 1024) {
+                            alert("파일 크기는 10MB 이하여야 합니다.");
+                            return;
+                          }
+
+                          // 미리보기 생성
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setTravelImagePreview(reader.result);
+                          };
+                          reader.readAsDataURL(file);
+                          setTravelImageFile(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <div className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm text-center cursor-pointer hover:bg-slate-100 transition-colors flex items-center justify-center gap-2">
+                      <ImageIcon className="w-5 h-5" />
+                      {travelImagePreview ? "이미지 변경" : "이미지 업로드"}
+                    </div>
+                  </label>
+                </div>
+
+                {/* URL 입력 (업로드하지 않을 경우) */}
                 <input
                   name="imageUrl"
                   type="url"
                   className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
-                  placeholder="https://..."
+                  placeholder="또는 이미지 URL 입력 (https://...)"
+                  disabled={!!travelImagePreview}
                 />
+                <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
+                  * 이미지를 업로드하거나 URL을 입력할 수 있습니다. (최대 10MB)
+                </p>
               </div>
 
               <div className="flex gap-3 pt-4">
@@ -1488,9 +1609,17 @@ function App() {
                 </button>
                 <button
                   type="submit"
-                  className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
+                  disabled={isUploadingImage}
+                  className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  만들기
+                  {isUploadingImage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      업로드 중...
+                    </>
+                  ) : (
+                    "만들기"
+                  )}
                 </button>
               </div>
             </form>
