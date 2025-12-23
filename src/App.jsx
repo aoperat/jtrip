@@ -58,6 +58,7 @@ function App() {
   } = useTravels();
 
   const [view, setView] = useState("home");
+  const [viewHistory, setViewHistory] = useState([]); // 뷰 히스토리 추적
   const [activeTab, setActiveTab] = useState("schedule");
   const [scheduleMode, setScheduleMode] = useState("list");
 
@@ -194,9 +195,29 @@ function App() {
     }
   };
 
+  // 뷰 변경 함수 - 히스토리 추적
+  const navigateToView = (newView) => {
+    if (view !== newView) {
+      setViewHistory((prev) => [...prev, view]);
+      setView(newView);
+    }
+  };
+
+  // 뒤로가기 함수
+  const goBack = () => {
+    if (viewHistory.length > 0) {
+      const previousView = viewHistory[viewHistory.length - 1];
+      setViewHistory((prev) => prev.slice(0, -1));
+      setView(previousView);
+    } else {
+      // 히스토리가 없으면 기본적으로 home으로
+      setView("home");
+    }
+  };
+
   const openTrip = (trip) => {
     setSelectedTripId(trip.id);
-    setView("detail");
+    navigateToView("detail");
     setActiveTab("schedule");
     setSelectedDay(1);
     setCheckedItems(new Set());
@@ -255,7 +276,7 @@ function App() {
                 <Search className="w-5 h-5" />
               </button>
               <button
-                onClick={() => setView("settings")}
+                onClick={() => navigateToView("settings")}
                 className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"
               >
                 <Settings className="w-5 h-5" />
@@ -353,7 +374,7 @@ function App() {
           <header className="px-6 pt-12 pb-5 bg-white/70 backdrop-blur-xl border-b border-slate-100 flex justify-between items-end sticky top-0 z-50">
             <div className="flex flex-col gap-2">
               <button
-                onClick={() => setView("home")}
+                onClick={goBack}
                 className="flex items-center gap-1.5 text-slate-400 hover:text-blue-600 transition-colors group"
               >
                 <ChevronLeft className="w-4 h-4" />
@@ -972,9 +993,10 @@ function App() {
       {view === "settings" && (
         <SettingsView
           user={user}
-          onClose={() => setView("home")}
+          onClose={goBack}
           onSignOut={async () => {
             await signOut();
+            setViewHistory([]); // 로그아웃 시 히스토리 초기화
             setView("home");
           }}
         />
