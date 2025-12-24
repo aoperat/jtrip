@@ -13,5 +13,14 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     assetsDir: 'assets',
+    // 파일명에 해시 추가하여 캐시 무효화
+    rollupOptions: {
+      output: {
+        // 파일명에 해시 포함 (기본적으로 활성화되어 있음)
+        entryFileNames: 'assets/[name].[hash].js',
+        chunkFileNames: 'assets/[name].[hash].js',
+        assetFileNames: 'assets/[name].[hash].[ext]',
+      },
+    },
   },
 })
