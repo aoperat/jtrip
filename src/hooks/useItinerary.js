@@ -67,6 +67,9 @@ export function useItinerary(travelId) {
           latitude: item.latitude || null,
           longitude: item.longitude || null,
           image: item.image_url || null,
+          imagePositionX: item.image_position_x ?? 0,
+          imagePositionY: item.image_position_y ?? 0,
+          imageScale: item.image_scale || 400,
           is_checked: item.is_checked,
           hasTicket: false, // 나중에 ticket_types와 조인하여 설정
           prepId: null, // 나중에 preparations와 조인하여 설정
@@ -103,6 +106,9 @@ export function useItinerary(travelId) {
           latitude: itemData.latitude || null,
           longitude: itemData.longitude || null,
           image_url: itemData.imageUrl || null,
+          image_position_x: itemData.imagePositionX ?? 0,
+          image_position_y: itemData.imagePositionY ?? 0,
+          image_scale: itemData.imageScale || 400,
           is_checked: false,
           created_by: user.id,
         })

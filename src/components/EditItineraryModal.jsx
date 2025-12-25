@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { X, Camera, Image as ImageIcon, Trash2 } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { X, Camera, Image as ImageIcon, Trash2, ZoomIn, ZoomOut } from "lucide-react";
 import PlaceSearchInput from "./PlaceSearchInput";
 import { uploadItineraryImage, captureImageFromCamera, selectImageFromAlbum } from "../lib/storage";
 import { supabase } from "../lib/supabase";
@@ -20,6 +20,10 @@ export default function EditItineraryModal({
     address: item?.address || "",
     latitude: item?.latitude || null,
     longitude: item?.longitude || null,
+    imageUrl: item?.image || null,
+    imagePositionX: item?.imagePositionX ?? 0,
+    imagePositionY: item?.imagePositionY ?? 0,
+    imageScale: item?.imageScale || 400,
   });
   const [locationData, setLocationData] = useState(
     item?.latitude && item?.longitude
@@ -34,6 +38,9 @@ export default function EditItineraryModal({
   const [imagePreview, setImagePreview] = useState(item?.image || null);
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const cardPreviewRef = useRef(null);
+  const dragStartPos = useRef({ x: 0, y: 0 });
 
   const handlePlaceSelect = (data) => {
     setLocationData(data);
@@ -68,6 +75,103 @@ export default function EditItineraryModal({
   const handleRemoveImage = () => {
     setImagePreview(null);
     setImageFile(null);
+    setFormData((prev) => ({
+      ...prev,
+      imageScale: 400,
+      imagePositionX: 0,
+      imagePositionY: 0,
+    }));
+  };
+
+  // 확대/축소 핸들러 (픽셀 단위)
+  const handleZoomIn = () => {
+    setFormData((prev) => ({
+      ...prev,
+      imageScale: Math.min(2000, (prev.imageScale || 400) + 50),
+    }));
+  };
+
+  const handleZoomOut = () => {
+    setFormData((prev) => ({
+      ...prev,
+      imageScale: Math.max(200, (prev.imageScale || 400) - 50),
+    }));
+  };
+
+  // 마우스 휠로 확대/축소 (픽셀 단위)
+  const handleWheel = (e) => {
+    if (!imagePreview) return;
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -50 : 50;
+    setFormData((prev) => ({
+      ...prev,
+      imageScale: Math.max(200, Math.min(2000, (prev.imageScale || 400) + delta)),
+    }));
+  };
+
+  // 드래그 시작
+  const handleDragStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+    
+    if (cardPreviewRef.current) {
+      const cardRect = cardPreviewRef.current.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      
+      dragStartPos.current = {
+        x: clientX - cardRect.left,
+        y: clientY - cardRect.top,
+      };
+    }
+  };
+
+  // 드래그 중 (백분율 기반, 실제 카드 크기 기준)
+  const handleDragMove = (e) => {
+    if (!isDragging || !cardPreviewRef.current) return;
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const cardRect = cardPreviewRef.current.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    // 카드 내부의 픽셀 좌표 계산
+    const x = clientX - cardRect.left;
+    const y = clientY - cardRect.top;
+    
+    // 실제 카드의 예상 크기 (일정 탭에서의 평균 크기)
+    // 실제 카드는 p-6 컨테이너 안에 있고, 화면 너비에서 패딩을 뺀 값
+    // 모바일: 약 360px, 데스크톱: 약 400-500px
+    // 미리보기 카드 크기를 기준으로 백분율 계산
+    const cardWidth = cardRect.width;
+    const cardHeight = cardRect.height;
+    
+    // 백분율로 저장 (0-100)
+    const percentX = (x / cardWidth) * 100;
+    const percentY = (y / cardHeight) * 100;
+    
+    // 실제 카드 크기를 기준으로 픽셀 값 계산
+    // 실제 카드는 보통 400-500px 너비, 120-150px 높이 정도
+    // 표준 크기: 450px 너비, 130px 높이를 기준으로 계산
+    const standardWidth = 450;
+    const standardHeight = 130;
+    
+    setFormData((prev) => ({
+      ...prev,
+      imagePositionX: Math.round((percentX / 100) * standardWidth),
+      imagePositionY: Math.round((percentY / 100) * standardHeight),
+    }));
+  };
+
+  // 드래그 종료
+  const handleDragEnd = (e) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    setIsDragging(false);
   };
 
   const handleSubmit = async (e) => {
@@ -79,7 +183,7 @@ export default function EditItineraryModal({
 
     try {
       setIsUploading(true);
-      let imageUrl = formData.imageUrl || null;
+      let imageUrl = formData.imageUrl || item?.image || null;
 
       // 새 이미지 업로드
       if (imageFile) {
@@ -92,8 +196,11 @@ export default function EditItineraryModal({
         }
         imageUrl = uploadResult.data.publicUrl;
       } else if (!imagePreview && item?.image) {
-        // 이미지가 제거된 경우
+        // 이미지가 제거된 경우 (imagePreview가 null이고 기존 이미지가 있었던 경우)
         imageUrl = null;
+      } else if (imagePreview && !imageFile && item?.image) {
+        // 기존 이미지가 있고 새로 업로드하지 않은 경우 기존 이미지 URL 유지
+        imageUrl = item.image;
       }
 
       const result = await onUpdate({
@@ -105,7 +212,10 @@ export default function EditItineraryModal({
         address: formData.address || null,
         latitude: formData.latitude || null,
         longitude: formData.longitude || null,
-        imageUrl: imageUrl,
+                        imageUrl: imageUrl,
+        imagePositionX: formData.imagePositionX,
+        imagePositionY: formData.imagePositionY,
+        imageScale: formData.imageScale,
       });
 
       if (result.error) {
@@ -225,19 +335,119 @@ export default function EditItineraryModal({
               사진 (선택)
             </label>
             {imagePreview ? (
-              <div className="relative">
-                <img
-                  src={imagePreview}
-                  alt="미리보기"
-                  className="w-full h-48 object-cover rounded-2xl"
-                />
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute top-2 right-2 p-2 bg-slate-900/70 backdrop-blur-sm text-white rounded-xl active:scale-90 transition-all"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              <div className="space-y-3">
+                <div className="relative">
+                  <img
+                    src={imagePreview}
+                    alt="미리보기"
+                    className="w-full h-48 object-cover rounded-2xl"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleRemoveImage}
+                    className="absolute top-2 right-2 p-2 bg-slate-900/70 backdrop-blur-sm text-white rounded-xl active:scale-90 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+                {/* 카드 미리보기 및 드래그로 위치 지정 */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest block ml-1 leading-none">
+                      배경 이미지 위치
+                    </label>
+                    {/* 확대/축소 버튼 */}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleZoomOut}
+                        disabled={formData.imageScale <= 50}
+                        className="p-1.5 bg-slate-100 rounded-lg text-slate-400 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="축소"
+                      >
+                        <ZoomOut className="w-4 h-4" />
+                      </button>
+                      <span className="text-[10px] font-bold text-slate-600 min-w-[4rem] text-center">
+                        {formData.imageScale}px
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleZoomIn}
+                        disabled={formData.imageScale >= 2000}
+                        className="p-1.5 bg-slate-100 rounded-lg text-slate-400 hover:bg-slate-200 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="확대"
+                      >
+                        <ZoomIn className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  {/* 실제 카드와 동일한 컨테이너 구조 - p-6 패딩 시뮬레이션 */}
+                  <div className="-mx-2 px-2">
+                    <div className="relative pl-8 flex items-start gap-3">
+                    <div
+                      ref={cardPreviewRef}
+                      className="flex-1 p-4 rounded-3xl border border-slate-100 overflow-hidden flex gap-3 relative group cursor-move touch-none shadow-sm"
+                      style={{
+                        backgroundImage: imagePreview ? `url(${imagePreview})` : "none",
+                        backgroundSize: `${formData.imageScale || 400}px`,
+                        backgroundPosition: (() => {
+                          // 저장된 픽셀 값을 백분율로 변환
+                          const standardWidth = 450;
+                          const standardHeight = 130;
+                          const percentX = ((formData.imagePositionX || 0) / standardWidth) * 100;
+                          const percentY = ((formData.imagePositionY || 0) / standardHeight) * 100;
+                          return `${percentX}% ${percentY}%`;
+                        })(),
+                        touchAction: "none",
+                      }}
+                      onMouseDown={handleDragStart}
+                      onMouseMove={handleDragMove}
+                      onMouseUp={handleDragEnd}
+                      onMouseLeave={handleDragEnd}
+                      onTouchStart={handleDragStart}
+                      onTouchMove={handleDragMove}
+                      onTouchEnd={handleDragEnd}
+                      onTouchCancel={handleDragEnd}
+                      onWheel={handleWheel}
+                    >
+                      {/* 오버레이 그라데이션 */}
+                      {imagePreview && (
+                        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
+                      )}
+                      
+                      {/* 카드 내용 미리보기 - 실제 카드와 동일한 레이아웃 */}
+                      <div className="flex-1 overflow-hidden relative z-10 pointer-events-none">
+                        <div className="flex justify-between items-start mb-1">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-white">
+                            {formData.time || "10:00"}
+                          </span>
+                        </div>
+                        <h3 className="font-bold text-sm leading-tight text-white">
+                          {formData.title || "일정 제목"}
+                        </h3>
+                        <p className="text-[11px] mt-0.5 leading-tight text-white/80">
+                          {formData.description || "설명"}
+                        </p>
+                      </div>
+                      
+                      {/* 드래그 안내 */}
+                      {!isDragging && (
+                        <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
+                          <div className="bg-black/50 backdrop-blur-sm rounded-xl px-3 py-1.5">
+                            <p className="text-[10px] text-white font-bold text-center">
+                              👆 드래그: 위치 조절<br />
+                              🖱️ 휠: 확대/축소
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
+                    드래그로 위치 조절, 마우스 휠 또는 버튼으로 확대/축소
+                  </p>
+                </div>
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3">

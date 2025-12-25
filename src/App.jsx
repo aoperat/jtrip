@@ -12,6 +12,7 @@ import {
   QrCode,
   Bell,
   CheckCircle2,
+  CheckCircle,
   ChevronLeft,
   Users,
   Camera,
@@ -56,6 +57,7 @@ import { usePreparations } from "./hooks/usePreparations";
 import { useSharedInfo } from "./hooks/useSharedInfo";
 import { usePlanGroups } from "./hooks/usePlanGroups";
 import { useAuth } from "./hooks/useAuth";
+import { uploadTravelImage } from "./lib/storage";
 
 function App() {
   const { user, signOut } = useAuth();
@@ -63,6 +65,8 @@ function App() {
     travels,
     loading: travelsLoading,
     createTravel,
+    updateTravel,
+    deleteTravel,
     addParticipant,
     createInviteLink,
     sendInvitation,
@@ -86,6 +90,8 @@ function App() {
   const [selectedTicketType, setSelectedTicketType] = useState(null);
   const [viewingTicket, setViewingTicket] = useState(null);
   const [showCreateTripModal, setShowCreateTripModal] = useState(false);
+  const [showEditTripModal, setShowEditTripModal] = useState(false);
+  const [editingTravel, setEditingTravel] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadTargetUser, setUploadTargetUser] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -251,6 +257,28 @@ function App() {
       selectedIds.includes(item.id)
     );
 
+    // 전체 탭일 때는 선택한 일정들의 날짜 확인
+    let groupDay = selectedDay;
+    if (selectedDay === "all") {
+      // 선택한 일정들의 날짜 분포 확인
+      const dayCounts = {};
+      selectedItems.forEach((item) => {
+        dayCounts[item.day] = (dayCounts[item.day] || 0) + 1;
+      });
+      // 가장 많은 일정이 있는 날짜 선택
+      groupDay = Object.keys(dayCounts).reduce((a, b) =>
+        dayCounts[a] > dayCounts[b] ? a : b
+      );
+
+      // 선택한 일정이 모두 같은 날짜인지 확인
+      const uniqueDays = Object.keys(dayCounts);
+      if (uniqueDays.length > 1) {
+        addNotification(
+          `선택한 일정이 서로 다른 날짜에 있습니다. 가장 많은 일정이 있는 Day ${groupDay}로 그룹화됩니다.`
+        );
+      }
+    }
+
     // 원본 일정 ID를 참조하도록 변환
     const itemsWithRef = selectedItems.map((item) => ({
       ...item,
@@ -258,7 +286,7 @@ function App() {
     }));
 
     const newGroup = {
-      day: selectedDay,
+      day: parseInt(groupDay),
       travelId: selectedTripId,
       variants: {
         A: itemsWithRef,
@@ -404,7 +432,12 @@ function App() {
 
   // 현재 선택된 날짜에서 그룹화된 아이템 ID 목록
   const groupedItemIds = planGroups
-    .filter((g) => g.day === selectedDay && g.travelId === selectedTripId)
+    .filter((g) => {
+      if (selectedDay === "all") {
+        return g.travelId === selectedTripId;
+      }
+      return g.day === selectedDay && g.travelId === selectedTripId;
+    })
     .flatMap((g) =>
       (g.variants.A || [])
         .map((item) => item.originalItineraryId || item.id)
@@ -584,6 +617,48 @@ function App() {
                               {trip.date}
                             </p>
                           </div>
+                          {/* 수정/삭제 버튼 - hover 시 표시 */}
+                          <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingTravel(trip);
+                                setTravelImagePreview(trip.image || "");
+                                setTravelImageFile(null);
+                                setShowEditTripModal(true);
+                              }}
+                              className="p-2 bg-white/90 backdrop-blur-sm rounded-full text-blue-600 hover:bg-white transition-colors shadow-lg"
+                              title="수정"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (
+                                  confirm(
+                                    `"${trip.title}" 여행을 삭제하시겠습니까?`
+                                  )
+                                ) {
+                                  const result = await deleteTravel(trip.id);
+                                  if (result.error) {
+                                    alert("삭제 실패: " + result.error.message);
+                                  } else {
+                                    addNotification("여행이 삭제되었습니다.");
+                                    // 현재 선택된 여행이 삭제된 여행이면 홈으로 이동
+                                    if (selectedTripId === trip.id) {
+                                      setView("home");
+                                      setSelectedTripId(null);
+                                    }
+                                  }
+                                }
+                              }}
+                              className="p-2 bg-white/90 backdrop-blur-sm rounded-full text-red-600 hover:bg-white transition-colors shadow-lg"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                         <div className="p-4 flex justify-between items-center bg-white">
                           <div className="flex -space-x-2">
@@ -721,22 +796,20 @@ function App() {
                         <MapIcon className="w-4 h-4" />
                       </button>
                     </div>
-                    {selectedDay !== "all" && (
-                      <button
-                        onClick={() => {
-                          setSelectionMode(!selectionMode);
-                          setSelectedIds([]);
-                        }}
-                        className={`px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
-                          selectionMode
-                            ? "bg-blue-600 text-white shadow-xl"
-                            : "bg-slate-100 text-slate-400 hover:bg-slate-200"
-                        }`}
-                      >
-                        <Layers className="w-4 h-4" />
-                        {selectionMode ? "취소" : "플랜 그룹"}
-                      </button>
-                    )}
+                    <button
+                      onClick={() => {
+                        setSelectionMode(!selectionMode);
+                        setSelectedIds([]);
+                      }}
+                      className={`px-4 py-3 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+                        selectionMode
+                          ? "bg-blue-600 text-white shadow-xl"
+                          : "bg-slate-100 text-slate-400 hover:bg-slate-200"
+                      }`}
+                    >
+                      <Layers className="w-4 h-4" />
+                      {selectionMode ? "취소" : "플랜 그룹"}
+                    </button>
                   </div>
 
                   <div className="flex gap-2.5 -mx-6 px-6 py-5 overflow-x-auto no-scrollbar border-b border-slate-100 sticky top-0 bg-[#F8FAFC]/80 backdrop-blur-md z-40">
@@ -788,7 +861,29 @@ function App() {
                           travelDays.map((dayInfo) => {
                             const dayItems =
                               selectedTripData?.itinerary?.[dayInfo.day] || [];
-                            if (dayItems.length === 0) return null;
+                            const dayPlanGroups = planGroups.filter(
+                              (g) =>
+                                g.day === dayInfo.day &&
+                                g.travelId === selectedTripId
+                            );
+                            const dayGroupedItemIds = dayPlanGroups.flatMap(
+                              (g) =>
+                                (g.variants.A || [])
+                                  .map(
+                                    (item) =>
+                                      item.originalItineraryId || item.id
+                                  )
+                                  .filter(Boolean)
+                            );
+                            const filteredDayItems = dayItems.filter(
+                              (item) => !dayGroupedItemIds.includes(item.id)
+                            );
+
+                            if (
+                              filteredDayItems.length === 0 &&
+                              dayPlanGroups.length === 0
+                            )
+                              return null;
 
                             return (
                               <div key={dayInfo.day} className="space-y-4">
@@ -797,7 +892,334 @@ function App() {
                                     DAY {dayInfo.day} · {dayInfo.dateString}
                                   </h3>
                                 </div>
-                                {dayItems.map((item) => {
+
+                                {/* 플랜 그룹 카드들 */}
+                                {dayPlanGroups.map((group) => (
+                                  <div
+                                    key={group.id}
+                                    className="mb-4 animate-in slide-in-from-bottom-4"
+                                  >
+                                    <div className="bg-blue-50 rounded-3xl p-4 border-2 border-blue-200 shadow-sm">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex gap-2">
+                                          {["A", "B", "C"].map((v) => {
+                                            const variant = group.variants[v];
+                                            const isCreated = variant !== null;
+                                            const hasItems =
+                                              isCreated && variant.length > 0;
+                                            return (
+                                              <button
+                                                key={v}
+                                                onClick={() =>
+                                                  setVariantActive(group.id, v)
+                                                }
+                                                disabled={!isCreated}
+                                                className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-black uppercase transition-all ${
+                                                  group.activeVariant === v
+                                                    ? "bg-blue-600 text-white shadow-lg"
+                                                    : isCreated
+                                                    ? hasItems
+                                                      ? "bg-white text-slate-400 hover:bg-blue-100"
+                                                      : "bg-blue-100 text-blue-400 hover:bg-blue-200"
+                                                    : "bg-slate-100 text-slate-200 cursor-not-allowed"
+                                                }`}
+                                              >
+                                                {v}
+                                              </button>
+                                            );
+                                          })}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest bg-white px-2 py-1 rounded-full">
+                                            플랜 그룹
+                                          </span>
+                                          <button
+                                            onClick={() =>
+                                              deleteGroup(group.id)
+                                            }
+                                            className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
+                                          >
+                                            <Trash2 className="w-3.5 h-3.5" />
+                                          </button>
+                                        </div>
+                                      </div>
+
+                                      <div className="space-y-2">
+                                        {(
+                                          group.variants[group.activeVariant] ||
+                                          []
+                                        ).length === 0 ? (
+                                          <div className="text-center py-4">
+                                            <p className="text-slate-400 text-xs mb-3">
+                                              플랜 {group.activeVariant}에
+                                              일정이 없습니다
+                                            </p>
+                                            <button
+                                              onClick={() => {
+                                                setAddingItineraryDay(
+                                                  group.day
+                                                );
+                                                setAddingItineraryWithTime(
+                                                  null
+                                                );
+                                                setPlanGroupContext({
+                                                  groupId: group.id,
+                                                  variantKey:
+                                                    group.activeVariant,
+                                                });
+                                                setShowAddItineraryModal(true);
+                                              }}
+                                              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
+                                            >
+                                              <Plus className="w-3.5 h-3.5" />
+                                              일정 추가하기
+                                            </button>
+                                          </div>
+                                        ) : (
+                                          <>
+                                            {(
+                                              group.variants[
+                                                group.activeVariant
+                                              ] || []
+                                            ).map((item) => {
+                                              // 원본 itinerary 아이템 찾기
+                                              const originalItem =
+                                                item.originalItineraryId
+                                                  ? Object.values(
+                                                      selectedTripData?.itinerary ||
+                                                        {}
+                                                    )
+                                                      .flat()
+                                                      .find(
+                                                        (it) =>
+                                                          it.id ===
+                                                          item.originalItineraryId
+                                                      )
+                                                  : null;
+                                              const displayItem =
+                                                originalItem || item;
+                                              const isItemChecked =
+                                                checkedItems.has(
+                                                  displayItem.id
+                                                ) || displayItem.is_checked;
+
+                                              return (
+                                                <div
+                                                  key={item.id}
+                                                  className="relative pl-8 flex items-start gap-3"
+                                                >
+                                                  <button
+                                                    onClick={() =>
+                                                      toggleItemCheck(
+                                                        displayItem.id
+                                                      )
+                                                    }
+                                                    className="absolute left-0 top-2 p-0.5 z-10 transition-all"
+                                                  >
+                                                    {isItemChecked ? (
+                                                      <CheckSquare
+                                                        className="w-5 h-5 text-blue-500"
+                                                        strokeWidth={2.5}
+                                                      />
+                                                    ) : (
+                                                      <Square
+                                                        className="w-5 h-5 text-slate-300"
+                                                        strokeWidth={2.5}
+                                                      />
+                                                    )}
+                                                  </button>
+                                                  <div
+                                                    onClick={(e) => {
+                                                      // 버튼 클릭이 아닐 때만 상세 정보 표시
+                                                      if (
+                                                        !e.target.closest(
+                                                          "button"
+                                                        )
+                                                      ) {
+                                                        setSelectedItineraryItem(
+                                                          displayItem
+                                                        );
+                                                      }
+                                                    }}
+                                                    className={`flex-1 p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 relative group/item cursor-pointer active:scale-[0.98] transition-all overflow-hidden ${
+                                                      displayItem.image
+                                                        ? ""
+                                                        : isItemChecked
+                                                        ? "bg-slate-50 opacity-40"
+                                                        : "bg-white"
+                                                    }`}
+                                                    style={
+                                                      displayItem.image
+                                                        ? (() => {
+                                                            // 저장된 픽셀 값을 백분율로 변환
+                                                            const standardWidth = 450;
+                                                            const standardHeight = 130;
+                                                            const percentX =
+                                                              ((displayItem.imagePositionX ??
+                                                                0) /
+                                                                standardWidth) *
+                                                              100;
+                                                            const percentY =
+                                                              ((displayItem.imagePositionY ??
+                                                                0) /
+                                                                standardHeight) *
+                                                              100;
+                                                            return {
+                                                              backgroundImage: `url(${displayItem.image})`,
+                                                              backgroundSize: `${
+                                                                displayItem.imageScale ||
+                                                                400
+                                                              }px`,
+                                                              backgroundPosition: `${percentX}% ${percentY}%`,
+                                                            };
+                                                          })()
+                                                        : undefined
+                                                    }
+                                                  >
+                                                    {/* 배경 이미지 오버레이 */}
+                                                    {displayItem.image && (
+                                                      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
+                                                    )}
+                                                    <div className="flex-1 min-w-0 relative z-10">
+                                                      <p
+                                                        className={`text-[9px] font-black uppercase mb-0.5 ${
+                                                          displayItem.image
+                                                            ? "text-white"
+                                                            : "text-blue-600"
+                                                        }`}
+                                                      >
+                                                        {item.time}
+                                                      </p>
+                                                      <h4
+                                                        className={`font-bold text-sm truncate ${
+                                                          displayItem.image
+                                                            ? "text-white"
+                                                            : "text-slate-800"
+                                                        }`}
+                                                      >
+                                                        {item.title}
+                                                      </h4>
+                                                    </div>
+                                                    {/* + / 수정 / 삭제 버튼 */}
+                                                    <div
+                                                      className="flex gap-1"
+                                                      onClick={(e) =>
+                                                        e.stopPropagation()
+                                                      }
+                                                    >
+                                                      <button
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setAddingItineraryDay(
+                                                            group.day
+                                                          );
+                                                          setAddingItineraryWithTime(
+                                                            item.time || null
+                                                          );
+                                                          setPlanGroupContext({
+                                                            groupId: group.id,
+                                                            variantKey:
+                                                              group.activeVariant,
+                                                          });
+                                                          setShowAddItineraryModal(
+                                                            true
+                                                          );
+                                                        }}
+                                                        className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
+                                                        title="일정 추가"
+                                                      >
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                      </button>
+                                                      <button
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setEditingVariantItem(
+                                                            {
+                                                              groupId: group.id,
+                                                              variantKey:
+                                                                group.activeVariant,
+                                                              item,
+                                                            }
+                                                          );
+                                                        }}
+                                                        className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                                        title="수정"
+                                                      >
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                      </button>
+                                                      <button
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          if (
+                                                            confirm(
+                                                              "일정을 삭제하시겠습니까?"
+                                                            )
+                                                          ) {
+                                                            handleDeleteVariantItem(
+                                                              group.id,
+                                                              group.activeVariant,
+                                                              item.id
+                                                            );
+                                                          }
+                                                        }}
+                                                        className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                        title="삭제"
+                                                      >
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              );
+                                            })}
+                                            {/* 일정이 있을 때도 추가 버튼 표시 */}
+                                            <button
+                                              onClick={() =>
+                                                setAddingToGroup({
+                                                  groupId: group.id,
+                                                  variantKey:
+                                                    group.activeVariant,
+                                                })
+                                              }
+                                              className="w-full py-2 border border-dashed border-slate-200 rounded-xl text-[10px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-1.5"
+                                            >
+                                              <Plus className="w-3 h-3" />
+                                              일정 추가
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+
+                                      {/* 플랜 B/C 생성 버튼 */}
+                                      {group.variants.B === null && (
+                                        <button
+                                          onClick={() =>
+                                            handleAddVariant(group.id, "B")
+                                          }
+                                          className="w-full mt-3 py-2 border border-dashed border-blue-200 rounded-xl text-[10px] font-bold text-blue-400 hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-1.5"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                          플랜 B 생성
+                                        </button>
+                                      )}
+                                      {group.variants.B !== null &&
+                                        group.variants.C === null && (
+                                          <button
+                                            onClick={() =>
+                                              handleAddVariant(group.id, "C")
+                                            }
+                                            className="w-full mt-3 py-2 border border-dashed border-blue-200 rounded-xl text-[10px] font-bold text-blue-400 hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-1.5"
+                                          >
+                                            <Plus className="w-3 h-3" />
+                                            플랜 C 생성
+                                          </button>
+                                        )}
+                                    </div>
+                                  </div>
+                                ))}
+
+                                {/* 일반 일정 아이템들 (그룹화되지 않은 것만) */}
+                                {filteredDayItems.map((item) => {
                                   const isChecked =
                                     checkedItems.has(item.id) ||
                                     item.is_checked;
@@ -812,28 +1234,68 @@ function App() {
                                     >
                                       <button
                                         onClick={() => toggleItemCheck(item.id)}
-                                        className={`absolute left-0 top-2 w-[24px] h-[24px] rounded-full bg-white flex items-center justify-center z-10 transition-all border-2 ${
-                                          isChecked
-                                            ? "bg-blue-600 border-blue-600"
-                                            : "border-slate-300"
-                                        }`}
+                                        className="absolute left-0 top-2 p-0.5 z-10 transition-all"
                                       >
-                                        {isChecked && (
-                                          <CheckCircle2 className="w-4 h-4 text-white" />
+                                        {isChecked ? (
+                                          <CheckSquare
+                                            className="w-5 h-5 text-blue-500"
+                                            strokeWidth={2.5}
+                                          />
+                                        ) : (
+                                          <Square
+                                            className="w-5 h-5 text-slate-300"
+                                            strokeWidth={2.5}
+                                          />
                                         )}
                                       </button>
                                       <div
                                         onClick={() => {
                                           setSelectedItineraryItem(item);
                                         }}
-                                        className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
+                                        className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group overflow-hidden ${
                                           isChecked
-                                            ? "opacity-40 bg-slate-50 border-slate-100"
-                                            : "bg-white shadow-sm border-slate-100"
+                                            ? "opacity-40 border-slate-100"
+                                            : "shadow-sm border-slate-100"
+                                        } ${
+                                          item.image
+                                            ? ""
+                                            : isChecked
+                                            ? "bg-slate-50"
+                                            : "bg-white"
                                         }`}
+                                        style={
+                                          item.image
+                                            ? (() => {
+                                                // 카드 크기에 비례하여 backgroundPosition 계산
+                                                // 실제 카드는 flex-1로 크기가 가변적이므로,
+                                                // 저장된 픽셀 값을 백분율로 변환하여 적용
+                                                const standardWidth = 450;
+                                                const standardHeight = 130;
+                                                const percentX =
+                                                  ((item.imagePositionX ?? 0) /
+                                                    standardWidth) *
+                                                  100;
+                                                const percentY =
+                                                  ((item.imagePositionY ?? 0) /
+                                                    standardHeight) *
+                                                  100;
+                                                return {
+                                                  backgroundImage: `url(${item.image})`,
+                                                  backgroundSize: `${
+                                                    item.imageScale || 400
+                                                  }px`,
+                                                  backgroundPosition: `${percentX}% ${percentY}%`,
+                                                };
+                                              })()
+                                            : undefined
+                                        }
                                       >
+                                        {/* 배경 이미지 오버레이 */}
+                                        {item.image && (
+                                          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
+                                        )}
                                         <div
-                                          className="absolute top-2 right-2 flex gap-1 z-20"
+                                          className="absolute top-2 right-2 flex gap-1 z-30"
                                           onClick={(e) => e.stopPropagation()}
                                         >
                                           <button
@@ -877,12 +1339,16 @@ function App() {
                                             <Trash2 className="w-3.5 h-3.5" />
                                           </button>
                                         </div>
-                                        <div className="flex-1 overflow-hidden">
+                                        <div className="flex-1 overflow-hidden relative z-10">
                                           <div className="flex justify-between items-start mb-1">
                                             <span
                                               className={`text-[10px] font-bold uppercase tracking-widest ${
                                                 isChecked
-                                                  ? "text-slate-300"
+                                                  ? item.image
+                                                    ? "text-white/60"
+                                                    : "text-slate-300"
+                                                  : item.image
+                                                  ? "text-white"
                                                   : "text-blue-500"
                                               }`}
                                             >
@@ -934,25 +1400,26 @@ function App() {
                                           <h3
                                             className={`font-bold text-sm leading-tight ${
                                               isChecked
-                                                ? "text-slate-400 line-through"
+                                                ? item.image
+                                                  ? "text-white/70 line-through"
+                                                  : "text-slate-400 line-through"
+                                                : item.image
+                                                ? "text-white"
                                                 : "text-slate-800"
                                             }`}
                                           >
                                             {item.title}
                                           </h3>
-                                          <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                                          <p
+                                            className={`text-[11px] mt-0.5 leading-tight ${
+                                              item.image
+                                                ? "text-white/80"
+                                                : "text-slate-400"
+                                            }`}
+                                          >
                                             {item.desc}
                                           </p>
                                         </div>
-                                        {item.image && (
-                                          <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group/img">
-                                            <img
-                                              src={item.image}
-                                              alt={item.title}
-                                              className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
-                                            />
-                                          </div>
-                                        )}
                                       </div>
                                     </div>
                                   );
@@ -984,9 +1451,8 @@ function App() {
                             .map((group) => (
                               <div
                                 key={group.id}
-                                className="relative pl-8 mb-4 animate-in slide-in-from-bottom-4"
+                                className="mb-4 animate-in slide-in-from-bottom-4"
                               >
-                                <div className="absolute left-0 top-4 w-[24px] h-[24px] rounded-full bg-blue-600 border-4 border-white shadow-md z-10" />
                                 <div className="bg-blue-50 rounded-3xl p-4 border-2 border-blue-200 shadow-sm">
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex gap-2">
@@ -1076,102 +1542,171 @@ function App() {
                                               : null;
                                           const displayItem =
                                             originalItem || item;
+                                          const isItemChecked =
+                                            checkedItems.has(displayItem.id) ||
+                                            displayItem.is_checked;
 
                                           return (
                                             <div
                                               key={item.id}
-                                              onClick={(e) => {
-                                                // 버튼 클릭이 아닐 때만 상세 정보 표시
-                                                if (
-                                                  !e.target.closest("button")
-                                                ) {
-                                                  setSelectedItineraryItem(
-                                                    displayItem
-                                                  );
-                                                }
-                                              }}
-                                              className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 relative group/item cursor-pointer active:scale-[0.98] transition-all"
+                                              className="relative pl-8 flex items-start gap-3"
                                             >
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-[9px] font-black text-blue-600 uppercase mb-0.5">
-                                                  {item.time}
-                                                </p>
-                                                <h4 className="font-bold text-sm text-slate-800 truncate">
-                                                  {item.title}
-                                                </h4>
-                                              </div>
-                                              {item.image && (
-                                                <img
-                                                  src={item.image}
-                                                  className="w-10 h-10 rounded-xl object-cover border border-slate-50"
-                                                  alt=""
-                                                />
-                                              )}
-                                              {/* + / 수정 / 삭제 버튼 */}
+                                              <button
+                                                onClick={() =>
+                                                  toggleItemCheck(
+                                                    displayItem.id
+                                                  )
+                                                }
+                                                className="absolute left-0 top-2 p-0.5 z-10 transition-all"
+                                              >
+                                                {isItemChecked ? (
+                                                  <CheckSquare
+                                                    className="w-5 h-5 text-blue-500"
+                                                    strokeWidth={2.5}
+                                                  />
+                                                ) : (
+                                                  <Square
+                                                    className="w-5 h-5 text-slate-300"
+                                                    strokeWidth={2.5}
+                                                  />
+                                                )}
+                                              </button>
                                               <div
-                                                className="flex gap-1"
-                                                onClick={(e) =>
-                                                  e.stopPropagation()
+                                                onClick={(e) => {
+                                                  // 버튼 클릭이 아닐 때만 상세 정보 표시
+                                                  if (
+                                                    !e.target.closest("button")
+                                                  ) {
+                                                    setSelectedItineraryItem(
+                                                      displayItem
+                                                    );
+                                                  }
+                                                }}
+                                                className={`flex-1 p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 relative group/item cursor-pointer active:scale-[0.98] transition-all overflow-hidden ${
+                                                  displayItem.image
+                                                    ? ""
+                                                    : isItemChecked
+                                                    ? "bg-slate-50 opacity-40"
+                                                    : "bg-white"
+                                                }`}
+                                                style={
+                                                  displayItem.image
+                                                    ? (() => {
+                                                        // 저장된 픽셀 값을 백분율로 변환
+                                                        const standardWidth = 450;
+                                                        const standardHeight = 130;
+                                                        const percentX =
+                                                          ((displayItem.imagePositionX ??
+                                                            0) /
+                                                            standardWidth) *
+                                                          100;
+                                                        const percentY =
+                                                          ((displayItem.imagePositionY ??
+                                                            0) /
+                                                            standardHeight) *
+                                                          100;
+                                                        return {
+                                                          backgroundImage: `url(${displayItem.image})`,
+                                                          backgroundSize: `${
+                                                            displayItem.imageScale ||
+                                                            400
+                                                          }px`,
+                                                          backgroundPosition: `${percentX}% ${percentY}%`,
+                                                        };
+                                                      })()
+                                                    : undefined
                                                 }
                                               >
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setAddingItineraryDay(
-                                                      group.day
-                                                    );
-                                                    setAddingItineraryWithTime(
-                                                      item.time || null
-                                                    );
-                                                    setPlanGroupContext({
-                                                      groupId: group.id,
-                                                      variantKey:
-                                                        group.activeVariant,
-                                                    });
-                                                    setShowAddItineraryModal(
-                                                      true
-                                                    );
-                                                  }}
-                                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
-                                                  title="일정 추가"
+                                                {/* 배경 이미지 오버레이 */}
+                                                {displayItem.image && (
+                                                  <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
+                                                )}
+                                                <div className="flex-1 min-w-0 relative z-10">
+                                                  <p
+                                                    className={`text-[9px] font-black uppercase mb-0.5 ${
+                                                      displayItem.image
+                                                        ? "text-white"
+                                                        : "text-blue-600"
+                                                    }`}
+                                                  >
+                                                    {item.time}
+                                                  </p>
+                                                  <h4
+                                                    className={`font-bold text-sm truncate ${
+                                                      displayItem.image
+                                                        ? "text-white"
+                                                        : "text-slate-800"
+                                                    }`}
+                                                  >
+                                                    {item.title}
+                                                  </h4>
+                                                </div>
+                                                {/* + / 수정 / 삭제 버튼 */}
+                                                <div
+                                                  className="flex gap-1"
+                                                  onClick={(e) =>
+                                                    e.stopPropagation()
+                                                  }
                                                 >
-                                                  <Plus className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditingVariantItem({
-                                                      groupId: group.id,
-                                                      variantKey:
-                                                        group.activeVariant,
-                                                      item,
-                                                    });
-                                                  }}
-                                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
-                                                  title="수정"
-                                                >
-                                                  <Edit2 className="w-3.5 h-3.5" />
-                                                </button>
-                                                <button
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    if (
-                                                      confirm(
-                                                        "일정을 삭제하시겠습니까?"
-                                                      )
-                                                    ) {
-                                                      handleDeleteVariantItem(
-                                                        group.id,
-                                                        group.activeVariant,
-                                                        item.id
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setAddingItineraryDay(
+                                                        group.day
                                                       );
-                                                    }
-                                                  }}
-                                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                                  title="삭제"
-                                                >
-                                                  <Trash2 className="w-3.5 h-3.5" />
-                                                </button>
+                                                      setAddingItineraryWithTime(
+                                                        item.time || null
+                                                      );
+                                                      setPlanGroupContext({
+                                                        groupId: group.id,
+                                                        variantKey:
+                                                          group.activeVariant,
+                                                      });
+                                                      setShowAddItineraryModal(
+                                                        true
+                                                      );
+                                                    }}
+                                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
+                                                    title="일정 추가"
+                                                  >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setEditingVariantItem({
+                                                        groupId: group.id,
+                                                        variantKey:
+                                                          group.activeVariant,
+                                                        item,
+                                                      });
+                                                    }}
+                                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                                    title="수정"
+                                                  >
+                                                    <Edit2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      if (
+                                                        confirm(
+                                                          "일정을 삭제하시겠습니까?"
+                                                        )
+                                                      ) {
+                                                        handleDeleteVariantItem(
+                                                          group.id,
+                                                          group.activeVariant,
+                                                          item.id
+                                                        );
+                                                      }
+                                                    }}
+                                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                    title="삭제"
+                                                  >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                  </button>
+                                                </div>
                                               </div>
                                             </div>
                                           );
@@ -1247,20 +1782,27 @@ function App() {
                                       }`}
                                     >
                                       {isSelected && (
-                                        <Check className="w-4 h-4 text-white" />
+                                        <Check
+                                          className="w-5 h-5 text-white"
+                                          strokeWidth={3}
+                                        />
                                       )}
                                     </button>
                                   ) : (
                                     <button
                                       onClick={() => toggleItemCheck(item.id)}
-                                      className={`absolute left-0 top-2 w-[24px] h-[24px] rounded-full bg-white flex items-center justify-center z-10 transition-all border-2 ${
-                                        isChecked
-                                          ? "bg-blue-600 border-blue-600"
-                                          : "border-slate-300"
-                                      }`}
+                                      className="absolute left-0 top-2 p-0.5 z-10 transition-all"
                                     >
-                                      {isChecked && (
-                                        <CheckCircle2 className="w-4 h-4 text-white" />
+                                      {isChecked ? (
+                                        <CheckSquare
+                                          className="w-5 h-5 text-blue-500"
+                                          strokeWidth={2.5}
+                                        />
+                                      ) : (
+                                        <Square
+                                          className="w-5 h-5 text-slate-300"
+                                          strokeWidth={2.5}
+                                        />
                                       )}
                                     </button>
                                   )}
@@ -1272,17 +1814,42 @@ function App() {
                                         setSelectedItineraryItem(item);
                                       }
                                     }}
-                                    className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
+                                    className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group overflow-hidden ${
                                       isSelected
-                                        ? "border-blue-500 bg-blue-50 ring-2 ring-blue-200"
+                                        ? "border-blue-500 ring-2 ring-blue-200"
                                         : isChecked
-                                        ? "opacity-40 bg-slate-50 border-slate-100"
-                                        : "bg-white shadow-sm border-slate-100"
+                                        ? "opacity-40 border-slate-100"
+                                        : "shadow-sm border-slate-100"
+                                    } ${
+                                      item.image
+                                        ? ""
+                                        : isSelected
+                                        ? "bg-blue-50"
+                                        : isChecked
+                                        ? "bg-slate-50"
+                                        : "bg-white"
                                     }`}
+                                    style={
+                                      item.image
+                                        ? {
+                                            backgroundImage: `url(${item.image})`,
+                                            backgroundSize: `${
+                                              item.imageScale || 400
+                                            }px`,
+                                            backgroundPosition: `${
+                                              item.imagePositionX ?? 0
+                                            }px ${item.imagePositionY ?? 0}px`,
+                                          }
+                                        : undefined
+                                    }
                                   >
+                                    {/* 배경 이미지 오버레이 */}
+                                    {item.image && (
+                                      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
+                                    )}
                                     {!selectionMode && (
                                       <div
-                                        className="absolute top-2 right-2 flex gap-1 z-20"
+                                        className="absolute top-2 right-2 flex gap-1 z-30"
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         <button
@@ -1343,12 +1910,16 @@ function App() {
                                         </button>
                                       </div>
                                     )}
-                                    <div className="flex-1 overflow-hidden">
+                                    <div className="flex-1 overflow-hidden relative z-10">
                                       <div className="flex justify-between items-start mb-1">
                                         <span
                                           className={`text-[10px] font-bold uppercase tracking-widest ${
                                             isChecked
-                                              ? "text-slate-300"
+                                              ? item.image
+                                                ? "text-white/60"
+                                                : "text-slate-300"
+                                              : item.image
+                                              ? "text-white"
                                               : "text-blue-500"
                                           }`}
                                         >
@@ -1402,25 +1973,26 @@ function App() {
                                       <h3
                                         className={`font-bold text-sm leading-tight ${
                                           isChecked
-                                            ? "text-slate-400 line-through"
+                                            ? item.image
+                                              ? "text-white/70 line-through"
+                                              : "text-slate-400 line-through"
+                                            : item.image
+                                            ? "text-white"
                                             : "text-slate-800"
                                         }`}
                                       >
                                         {item.title}
                                       </h3>
-                                      <p className="text-[11px] text-slate-400 mt-0.5 leading-tight">
+                                      <p
+                                        className={`text-[11px] mt-0.5 leading-tight ${
+                                          item.image
+                                            ? "text-white/80"
+                                            : "text-slate-400"
+                                        }`}
+                                      >
                                         {item.desc}
                                       </p>
                                     </div>
-                                    {item.image && (
-                                      <div className="w-20 h-20 rounded-2xl overflow-hidden shrink-0 border border-slate-100 shadow-sm relative group/img">
-                                        <img
-                                          src={item.image}
-                                          alt={item.title}
-                                          className="w-full h-full object-cover transition-transform group-hover/img:scale-110"
-                                        />
-                                      </div>
-                                    )}
                                   </div>
                                 </div>
                               );
@@ -2840,6 +3412,9 @@ function App() {
               latitude: updates.latitude,
               longitude: updates.longitude,
               image_url: updates.imageUrl || null,
+              image_position_x: updates.imagePositionX ?? 0,
+              image_position_y: updates.imagePositionY ?? 0,
+              image_scale: updates.imageScale || 400,
             });
 
             // 업데이트 성공 시 selectedItineraryItem 업데이트
@@ -3094,6 +3669,229 @@ function App() {
                     </>
                   ) : (
                     "만들기"
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------- MODAL: EDIT TRIP -------------------- */}
+      {showEditTripModal && editingTravel && (
+        <div className="absolute inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
+          <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
+            <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
+              여행 수정 ✈️
+            </h2>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const title = formData.get("title");
+                const startDate = formData.get("startDate");
+                const endDate = formData.get("endDate");
+                let imageUrl = formData.get("imageUrl") || "";
+
+                if (!title || !startDate || !endDate) {
+                  alert("모든 필드를 입력해주세요.");
+                  return;
+                }
+
+                try {
+                  // 이미지 파일이 있으면 업로드
+                  if (travelImageFile) {
+                    setIsUploadingImage(true);
+                    const { data: uploadData, error: uploadError } =
+                      await uploadTravelImage(
+                        travelImageFile,
+                        user.id,
+                        editingTravel.id
+                      );
+
+                    if (uploadError) {
+                      alert("이미지 업로드 실패: " + uploadError.message);
+                      setIsUploadingImage(false);
+                      return;
+                    }
+
+                    imageUrl = uploadData.publicUrl;
+                    setIsUploadingImage(false);
+                  }
+
+                  // 이미지 URL이 없으면 기존 이미지 유지
+                  if (!imageUrl && !travelImageFile) {
+                    imageUrl = editingTravel.image || "";
+                  }
+
+                  const result = await updateTravel(editingTravel.id, {
+                    title,
+                    start_date: startDate,
+                    end_date: endDate,
+                    image_url: imageUrl || null,
+                  });
+
+                  if (result.error) {
+                    alert("여행 수정 실패: " + result.error.message);
+                  } else {
+                    addNotification("여행이 수정되었습니다.");
+                    setShowEditTripModal(false);
+                    setEditingTravel(null);
+                    setTravelImagePreview("");
+                    setTravelImageFile(null);
+                  }
+                } catch (error) {
+                  alert("오류가 발생했습니다: " + error.message);
+                  setIsUploadingImage(false);
+                }
+              }}
+              className="space-y-4 mb-10"
+            >
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                  여행 제목
+                </label>
+                <input
+                  name="title"
+                  autoFocus
+                  required
+                  defaultValue={editingTravel.title}
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="예: 도쿄 여행"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    출발일
+                  </label>
+                  <input
+                    name="startDate"
+                    type="date"
+                    required
+                    defaultValue={editingTravel.start_date}
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    귀국일
+                  </label>
+                  <input
+                    name="endDate"
+                    type="date"
+                    required
+                    defaultValue={editingTravel.end_date}
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                  대표 이미지 (선택)
+                </label>
+
+                {/* 이미지 미리보기 - 새로 업로드한 이미지 또는 기존 이미지 */}
+                {(travelImagePreview || editingTravel.image) && (
+                  <div className="relative mb-3 rounded-2xl overflow-hidden">
+                    <img
+                      src={travelImagePreview || editingTravel.image}
+                      alt="미리보기"
+                      className="w-full h-48 object-cover"
+                    />
+                    {travelImagePreview &&
+                      travelImagePreview !== editingTravel.image && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTravelImagePreview(editingTravel.image || "");
+                            setTravelImageFile(null);
+                          }}
+                          className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      )}
+                  </div>
+                )}
+
+                {/* 파일 업로드 버튼 */}
+                <div className="flex gap-2 mb-2">
+                  <label className="flex-1">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          // 파일 크기 체크
+                          if (file.size > 10 * 1024 * 1024) {
+                            alert("파일 크기는 10MB 이하여야 합니다.");
+                            return;
+                          }
+
+                          // 미리보기 생성
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setTravelImagePreview(reader.result);
+                          };
+                          reader.readAsDataURL(file);
+                          setTravelImageFile(file);
+                        }
+                      }}
+                      className="hidden"
+                    />
+                    <div className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm text-center cursor-pointer hover:bg-slate-100 transition-colors flex items-center justify-center gap-2">
+                      <ImageIcon className="w-5 h-5" />
+                      {travelImagePreview ? "이미지 변경" : "이미지 업로드"}
+                    </div>
+                  </label>
+                </div>
+
+                {/* URL 입력 (업로드하지 않을 경우) */}
+                <input
+                  name="imageUrl"
+                  type="url"
+                  defaultValue={
+                    !travelImageFile ? editingTravel.image || "" : ""
+                  }
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                  placeholder="또는 이미지 URL 입력 (https://...)"
+                  disabled={!!travelImageFile}
+                />
+                <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
+                  * 이미지를 업로드하거나 URL을 입력할 수 있습니다. (최대 10MB)
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowEditTripModal(false);
+                    setEditingTravel(null);
+                    setTravelImagePreview("");
+                    setTravelImageFile(null);
+                  }}
+                  className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  disabled={isUploadingImage}
+                  className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  {isUploadingImage ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      업로드 중...
+                    </>
+                  ) : (
+                    "수정하기"
                   )}
                 </button>
               </div>
