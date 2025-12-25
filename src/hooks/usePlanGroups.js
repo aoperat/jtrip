@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function usePlanGroups(travelId) {
   const [planGroups, setPlanGroups] = useState([]);
@@ -26,7 +27,7 @@ export function usePlanGroups(travelId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('플랜 그룹 변경 감지:', payload);
+          logger.realtime('플랜 그룹 변경 감지', payload);
           fetchPlanGroups();
         }
       )
@@ -38,7 +39,7 @@ export function usePlanGroups(travelId) {
           table: 'plan_group_items',
         },
         (payload) => {
-          console.log('플랜 그룹 아이템 변경 감지:', payload);
+          logger.realtime('플랜 그룹 아이템 변경 감지', payload);
           fetchPlanGroups();
         }
       )

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function useSharedInfo(travelId) {
   const [sharedInfo, setSharedInfo] = useState([]);
@@ -28,7 +29,7 @@ export function useSharedInfo(travelId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('공유 정보 변경 감지:', payload);
+          logger.realtime('공유 정보 변경 감지', payload);
           fetchSharedInfo();
         }
       )
@@ -41,7 +42,7 @@ export function useSharedInfo(travelId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('공지사항 변경 감지:', payload);
+          logger.realtime('공지사항 변경 감지', payload);
           fetchNotices();
         }
       )

@@ -11,6 +11,9 @@ export function useGoogleMaps() {
 
   useEffect(() => {
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    let handleLoad = null;
+    let handleError = null;
+    let targetScript = null;
 
     // API 키가 없는 경우
     if (!apiKey) {
@@ -39,19 +42,31 @@ export function useGoogleMaps() {
           setIsLoading(false);
         } else {
           // 스크립트가 로드 중이면 로드 완료를 기다림
-          const handleLoad = () => {
+          targetScript = existingScript;
+
+          handleLoad = () => {
             if (window.google && window.google.maps && window.google.maps.places) {
               setApiLoaded(true);
               setIsLoading(false);
             }
           };
-          existingScript.addEventListener('load', handleLoad);
-          existingScript.addEventListener('error', () => {
+
+          handleError = () => {
             setError('Google Maps API 로드에 실패했습니다. API 키를 확인해주세요.');
             setIsLoading(false);
-          });
+          };
+
+          existingScript.addEventListener('load', handleLoad);
+          existingScript.addEventListener('error', handleError);
         }
-        return;
+        return () => {
+          if (targetScript && handleLoad) {
+            targetScript.removeEventListener('load', handleLoad);
+          }
+          if (targetScript && handleError) {
+            targetScript.removeEventListener('error', handleError);
+          }
+        };
       }
     }
 
@@ -60,7 +75,7 @@ export function useGoogleMaps() {
     script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places&language=ko`;
     script.async = true;
     script.defer = true;
-    
+
     script.onload = () => {
       if (window.google && window.google.maps && window.google.maps.places) {
         setApiLoaded(true);
@@ -71,23 +86,13 @@ export function useGoogleMaps() {
         setIsLoading(false);
       }
     };
-    
+
     script.onerror = () => {
       setError('Google Maps API 로드에 실패했습니다. 네트워크 연결과 API 키를 확인해주세요.');
       setIsLoading(false);
     };
-    
-    document.head.appendChild(script);
 
-    // 정리 함수
-    return () => {
-      // 스크립트는 전역으로 유지하므로 제거하지 않음
-      // 단, 에러 리스너는 제거
-      if (existingScript) {
-        existingScript.removeEventListener('load', () => {});
-        existingScript.removeEventListener('error', () => {});
-      }
-    };
+    document.head.appendChild(script);
   }, []);
 
   return {

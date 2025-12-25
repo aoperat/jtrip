@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function useExpenses(travelId) {
   const [expenses, setExpenses] = useState([]);
@@ -26,7 +27,7 @@ export function useExpenses(travelId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('지출 변경 감지:', payload);
+          logger.realtime('지출 변경 감지', payload);
           fetchExpenses();
         }
       )

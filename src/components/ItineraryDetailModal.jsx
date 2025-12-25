@@ -1,11 +1,12 @@
-import { 
-  X, 
-  MapPin, 
-  Clock, 
-  FileText, 
-  Calendar, 
-  Edit2, 
-  Trash2, 
+import { useState, useEffect, useRef } from "react";
+import {
+  X,
+  MapPin,
+  Clock,
+  FileText,
+  Calendar,
+  Edit2,
+  Trash2,
   Navigation,
   ChevronRight,
   ChevronLeft,
@@ -15,6 +16,8 @@ import {
   Info,
   MoreVertical,
   Plus,
+  Share2,
+  Copy,
 } from "lucide-react";
 
 export default function ItineraryDetailModal({
@@ -33,6 +36,58 @@ export default function ItineraryDetailModal({
   onCreateInfo,
   onCreateItinerary,
 }) {
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef(null);
+
+  // 외부 클릭 시 메뉴 닫기
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setShowMenu(false);
+      }
+    };
+
+    if (showMenu) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showMenu]);
+
+  // 공유 기능
+  const handleShare = async () => {
+    const shareData = {
+      title: item.title,
+      text: item.desc || item.title,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // 사용자가 취소한 경우
+      }
+    } else {
+      // 클립보드에 복사
+      const text = `${item.title}\n${item.address || item.locationName || ""}`;
+      navigator.clipboard.writeText(text);
+      alert("클립보드에 복사되었습니다.");
+    }
+    setShowMenu(false);
+  };
+
+  // 주소 복사
+  const handleCopyAddress = () => {
+    const address = item.address || item.locationName || "";
+    if (address) {
+      navigator.clipboard.writeText(address);
+      alert("주소가 클립보드에 복사되었습니다.");
+    }
+    setShowMenu(false);
+  };
+
   if (!item) return null;
 
   // Linked 정보 찾기
@@ -74,12 +129,74 @@ export default function ItineraryDetailModal({
             장소 상세 정보
           </h2>
         </div>
-        <button className="p-3 bg-slate-50 rounded-2xl text-slate-400 active:scale-90 transition-all hover:bg-slate-100">
-          <MoreVertical className="w-6 h-6" />
-        </button>
+        <div className="relative" ref={menuRef}>
+          <button
+            onClick={() => setShowMenu(!showMenu)}
+            className="p-3 bg-slate-50 rounded-2xl text-slate-400 active:scale-90 transition-all hover:bg-slate-100"
+          >
+            <MoreVertical className="w-6 h-6" />
+          </button>
+
+          {showMenu && (
+            <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-2xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+              <button
+                onClick={() => {
+                  onEdit();
+                  setShowMenu(false);
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+              >
+                <Edit2 className="w-4 h-4" />
+                수정
+              </button>
+              <button
+                onClick={() => {
+                  onCreateItinerary();
+                  setShowMenu(false);
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+              >
+                <Plus className="w-4 h-4" />
+                일정 추가
+              </button>
+              <button
+                onClick={handleShare}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+              >
+                <Share2 className="w-4 h-4" />
+                공유
+              </button>
+              {(item.address || item.locationName) && (
+                <button
+                  onClick={handleCopyAddress}
+                  className="w-full px-4 py-3 text-left text-sm font-medium text-slate-700 hover:bg-slate-50 flex items-center gap-3"
+                >
+                  <Copy className="w-4 h-4" />
+                  주소 복사
+                </button>
+              )}
+              <div className="border-t border-slate-100 my-1" />
+              <button
+                onClick={async () => {
+                  if (confirm("정말 이 일정을 삭제하시겠습니까?")) {
+                    const result = await onDelete();
+                    if (!result.error) {
+                      onClose();
+                    }
+                  }
+                  setShowMenu(false);
+                }}
+                className="w-full px-4 py-3 text-left text-sm font-medium text-red-600 hover:bg-red-50 flex items-center gap-3"
+              >
+                <Trash2 className="w-4 h-4" />
+                삭제
+              </button>
+            </div>
+          )}
+        </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-32">
+      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-56">
         {/* Header Image */}
         {item.image && (
           <div className="relative h-64 -mx-6 -mt-6 mb-6 overflow-hidden bg-slate-100">

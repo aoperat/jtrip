@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function useAuth() {
   const [user, setUser] = useState(null);
@@ -49,10 +50,7 @@ export function useAuth() {
         return;
       }
       
-      // 디버깅용 로그 (개발 환경에서만)
-      if (import.meta.env.DEV) {
-        console.log('인증 상태 변경:', event, session?.user?.email || '로그아웃');
-      }
+      logger.debug('인증 상태 변경:', event, session?.user?.email || '로그아웃');
       
       setSession(session);
       setUser(session?.user ?? null);

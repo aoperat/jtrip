@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "../lib/supabase";
+import { logger } from "../lib/logger";
 
 export function useTravels() {
   const [travels, setTravels] = useState([]);
@@ -20,7 +21,7 @@ export function useTravels() {
           table: "travels",
         },
         (payload) => {
-          console.log("Travels 변경 감지:", payload);
+          logger.realtime("Travels 변경 감지", payload);
           fetchTravels();
         }
       )

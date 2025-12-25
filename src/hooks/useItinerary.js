@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function useItinerary(travelId) {
   const [itinerary, setItinerary] = useState({});
@@ -26,7 +27,7 @@ export function useItinerary(travelId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('일정 변경 감지:', payload);
+          logger.realtime('일정 변경 감지', payload);
           fetchItinerary();
         }
       )
@@ -42,7 +43,9 @@ export function useItinerary(travelId) {
 
     try {
       setLoading(true);
-      const { data, error: fetchError } = await supabase
+
+      // 1. itinerary 데이터 조회
+      const { data: itineraryData, error: fetchError } = await supabase
         .from('itinerary')
         .select('*')
         .eq('travel_id', travelId)
@@ -51,9 +54,48 @@ export function useItinerary(travelId) {
 
       if (fetchError) throw fetchError;
 
-      // 일차별로 그룹화
+      // 2. 연결된 데이터들을 병렬로 조회
+      const itineraryIds = itineraryData.map(item => item.id);
+
+      let ticketMap = new Map();
+      let prepMap = new Map();
+      let infoMap = new Map();
+      let expenseMap = new Map();
+
+      if (itineraryIds.length > 0) {
+        const [ticketResult, prepResult, infoResult, expenseResult] = await Promise.all([
+          supabase
+            .from('ticket_types')
+            .select('id, linked_itinerary_id')
+            .eq('travel_id', travelId)
+            .in('linked_itinerary_id', itineraryIds),
+          supabase
+            .from('preparations')
+            .select('id, linked_itinerary_id')
+            .eq('travel_id', travelId)
+            .in('linked_itinerary_id', itineraryIds),
+          supabase
+            .from('shared_info')
+            .select('id, linked_itinerary_id')
+            .eq('travel_id', travelId)
+            .in('linked_itinerary_id', itineraryIds),
+          supabase
+            .from('expenses')
+            .select('id, linked_itinerary_id')
+            .eq('travel_id', travelId)
+            .in('linked_itinerary_id', itineraryIds),
+        ]);
+
+        // 3. linked_itinerary_id를 키로 하는 Map 생성
+        (ticketResult.data || []).forEach(t => ticketMap.set(t.linked_itinerary_id, t.id));
+        (prepResult.data || []).forEach(p => prepMap.set(p.linked_itinerary_id, p.id));
+        (infoResult.data || []).forEach(i => infoMap.set(i.linked_itinerary_id, i.id));
+        (expenseResult.data || []).forEach(e => expenseMap.set(e.linked_itinerary_id, e.id));
+      }
+
+      // 4. 일차별로 그룹화하면서 연결 정보 포함
       const grouped = {};
-      data.forEach((item) => {
+      itineraryData.forEach((item) => {
         if (!grouped[item.day]) {
           grouped[item.day] = [];
         }
@@ -71,17 +113,17 @@ export function useItinerary(travelId) {
           imagePositionY: item.image_position_y ?? 0,
           imageScale: item.image_scale || 400,
           is_checked: item.is_checked,
-          hasTicket: false, // 나중에 ticket_types와 조인하여 설정
-          prepId: null, // 나중에 preparations와 조인하여 설정
-          infoId: null, // 나중에 shared_info와 조인하여 설정
-          expenseId: null, // 나중에 expenses와 조인하여 설정
+          hasTicket: ticketMap.has(item.id),
+          prepId: prepMap.get(item.id) || null,
+          infoId: infoMap.get(item.id) || null,
+          expenseId: expenseMap.get(item.id) || null,
         });
       });
 
       setItinerary(grouped);
       setError(null);
     } catch (err) {
-      console.error('일정 가져오기 실패:', err);
+      logger.error('일정 가져오기 실패:', err);
       setError(err.message);
     } finally {
       setLoading(false);
@@ -119,7 +161,7 @@ export function useItinerary(travelId) {
       await fetchItinerary();
       return { data, error: null };
     } catch (err) {
-      console.error('일정 항목 생성 실패:', err);
+      logger.error('일정 항목 생성 실패:', err);
       return { data: null, error: err };
     }
   };
@@ -137,7 +179,7 @@ export function useItinerary(travelId) {
       await fetchItinerary();
       return { data, error: null };
     } catch (err) {
-      console.error('일정 항목 업데이트 실패:', err);
+      logger.error('일정 항목 업데이트 실패:', err);
       return { data: null, error: err };
     }
   };
@@ -153,7 +195,7 @@ export function useItinerary(travelId) {
       await fetchItinerary();
       return { error: null };
     } catch (err) {
-      console.error('일정 항목 삭제 실패:', err);
+      logger.error('일정 항목 삭제 실패:', err);
       return { error: err };
     }
   };

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function usePreparations(travelId, currentUserId) {
   const [preparations, setPreparations] = useState([]);
@@ -26,7 +27,7 @@ export function usePreparations(travelId, currentUserId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('준비물 변경 감지:', payload);
+          logger.realtime('준비물 변경 감지', payload);
           fetchPreparations();
         }
       )
@@ -43,7 +44,7 @@ export function usePreparations(travelId, currentUserId) {
           table: 'preparation_checks',
         },
         (payload) => {
-          console.log('준비물 체크 상태 변경 감지:', payload);
+          logger.realtime('준비물 체크 상태 변경 감지', payload);
           fetchPreparations();
         }
       )

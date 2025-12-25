@@ -57,7 +57,9 @@ import { usePreparations } from "./hooks/usePreparations";
 import { useSharedInfo } from "./hooks/useSharedInfo";
 import { usePlanGroups } from "./hooks/usePlanGroups";
 import { useAuth } from "./hooks/useAuth";
-import { uploadTravelImage } from "./lib/storage";
+import { uploadTravelImage, uploadTicketImage } from "./lib/storage";
+import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import { supabase } from "./lib/supabase";
 
 function App() {
   const { user, signOut } = useAuth();
@@ -94,6 +96,13 @@ function App() {
   const [editingTravel, setEditingTravel] = useState(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadTargetUser, setUploadTargetUser] = useState(null);
+  const [ticketImageFile, setTicketImageFile] = useState(null);
+  const [ticketImagePreview, setTicketImagePreview] = useState(null);
+  const [ticketCode, setTicketCode] = useState("");
+  const [ticketType, setTicketType] = useState("QR"); // "QR" or "Barcode"
+  const [isUploadingTicket, setIsUploadingTicket] = useState(false);
+  const [registrationMethod, setRegistrationMethod] = useState("image"); // "image" | "code" | "url"
+  const [ticketUrl, setTicketUrl] = useState("");
   const [notifications, setNotifications] = useState([]);
   const [travelImagePreview, setTravelImagePreview] = useState("");
   const [travelImageFile, setTravelImageFile] = useState(null);
@@ -150,6 +159,7 @@ function App() {
     createTicketType,
     updateTicketType,
     deleteTicketType,
+    createRegistration,
   } = useTickets(selectedTripId);
   const {
     expenses,
@@ -457,6 +467,132 @@ function App() {
     // Supabase에 반영
     if (selectedTripId) {
       await toggleItineraryCheck(id, !isChecked);
+    }
+  };
+
+  // 이미지에서 QR/바코드 인식
+  const scanImageForCode = async (file) => {
+    try {
+      const html5QrCode = new Html5Qrcode();
+      const fileUrl = URL.createObjectURL(file);
+
+      try {
+        // QR 코드 및 바코드 스캔 시도 (html5-qrcode는 기본적으로 여러 형식 지원)
+        const result = await html5QrCode.scanFile(fileUrl, true);
+        if (result) {
+          setTicketCode(result);
+          // 결과가 숫자로만 이루어져 있으면 바코드로 간주, 그 외는 QR 코드로 간주
+          if (/^\d+$/.test(result) && result.length >= 8) {
+            setTicketType("Barcode");
+          } else {
+            setTicketType("QR");
+          }
+          return result;
+        }
+      } catch (scanError) {
+        // 인식 실패 - 수동 입력 필요
+        console.log("QR/바코드 인식 실패:", scanError);
+      } finally {
+        URL.revokeObjectURL(fileUrl);
+      }
+    } catch (error) {
+      console.error("스캔 오류:", error);
+    }
+    return null;
+  };
+
+  // 이미지 선택 핸들러
+  const handleImageSelect = async (file) => {
+    setTicketImageFile(file);
+
+    // 미리보기 생성
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setTicketImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+
+    // QR/바코드 인식 시도
+    const code = await scanImageForCode(file);
+    if (!code) {
+      // 인식 실패 시 사용자에게 알림
+      console.log(
+        "코드를 자동으로 인식하지 못했습니다. 수동으로 입력해주세요."
+      );
+    }
+  };
+
+  // 티켓 등록 제출 핸들러
+  const handleTicketSubmit = async (imageFile, code, typeOverride = null) => {
+    const registrationType = typeOverride || ticketType;
+
+    if (!selectedTicketType || !code.trim()) {
+      alert(
+        registrationType === "url"
+          ? "URL을 입력해주세요."
+          : "코드 번호를 입력해주세요."
+      );
+      return;
+    }
+
+    try {
+      setIsUploadingTicket(true);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
+
+      let imagePath = null;
+
+      // 이미지가 있으면 업로드 (URL 등록이 아닌 경우만)
+      if (imageFile && registrationType !== "url") {
+        const uploadResult = await uploadTicketImage(
+          imageFile,
+          user.id,
+          selectedTicketType.id
+        );
+        if (uploadResult.error) {
+          throw uploadResult.error;
+        }
+        imagePath = uploadResult.data.path;
+      }
+
+      // 공통 티켓인 경우 user_id를 null로 설정 (useTickets.js에서 'all'로 처리)
+      const targetUserId =
+        selectedTicketType.mode === "group"
+          ? null
+          : uploadTargetUser?.id || null;
+
+      const registrationData = {
+        type: registrationType.toUpperCase(), // "QR", "Barcode", "URL"
+        code: code.trim(),
+        imagePath: imagePath,
+      };
+
+      const result = await createRegistration(
+        selectedTicketType.id,
+        registrationData,
+        targetUserId
+      );
+
+      if (result.error) {
+        throw result.error;
+      }
+
+      addNotification("티켓이 등록되었습니다.");
+      setShowUploadModal(false);
+      setUploadTargetUser(null);
+      setTicketImageFile(null);
+      setTicketImagePreview(null);
+      setTicketCode("");
+      setTicketUrl("");
+      setTicketType("QR");
+      setRegistrationMethod("image");
+    } catch (error) {
+      console.error("티켓 등록 실패:", error);
+      alert("티켓 등록 실패: " + (error.message || error));
+    } finally {
+      setIsUploadingTicket(false);
     }
   };
 
@@ -2898,6 +3034,12 @@ function App() {
                   <button
                     onClick={() => {
                       setUploadTargetUser(null);
+                      setTicketImageFile(null);
+                      setTicketImagePreview(null);
+                      setTicketCode("");
+                      setTicketUrl("");
+                      setTicketType("QR");
+                      setRegistrationMethod("image");
                       setShowUploadModal(true);
                     }}
                     className="w-full py-10 border-2 border-dashed border-slate-200 rounded-[32px] text-slate-400 font-bold text-sm"
@@ -2968,6 +3110,12 @@ function App() {
                           <button
                             onClick={() => {
                               setUploadTargetUser(p);
+                              setTicketImageFile(null);
+                              setTicketImagePreview(null);
+                              setTicketCode("");
+                              setTicketUrl("");
+                              setTicketType("QR");
+                              setRegistrationMethod("image");
                               setShowUploadModal(true);
                             }}
                             className="flex items-center gap-1.5 px-3 py-2 bg-blue-600 text-white rounded-xl text-[10px] font-bold active:scale-95 shadow-lg shadow-blue-100"
@@ -3016,39 +3164,320 @@ function App() {
       )}
 
       {/* -------------------- MODAL: UPLOAD TICKET (IMAGE/SCAN) -------------------- */}
-      {showUploadModal && (
+      {showUploadModal && selectedTicketType && (
         <div className="absolute inset-0 z-[120] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
-          <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 text-center">
+          <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 max-h-[90vh] overflow-y-auto">
             <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
-            <h2 className="text-xl font-black mb-1 font-bold tracking-tight leading-none">
+            <h2 className="text-xl font-black mb-6 font-bold tracking-tight leading-none">
               {uploadTargetUser
                 ? `${uploadTargetUser.name}님의 티켓`
                 : "공통 티켓"}{" "}
               등록
             </h2>
-            <p className="text-xs text-slate-400 mb-8 font-medium">
-              바코드, QR, 영수증 이미지를 선택하세요.
-            </p>
-            <div className="grid grid-cols-2 gap-4 mb-10">
-              <button className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50">
-                <Camera className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                <span className="text-xs font-bold text-slate-600 group-hover:text-blue-600">
-                  카메라 스캔
-                </span>
+
+            {/* 등록 방법 선택 탭 */}
+            <div className="flex gap-2 mb-6 bg-slate-50 rounded-2xl p-1">
+              <button
+                onClick={() => {
+                  setRegistrationMethod("image");
+                  setTicketImageFile(null);
+                  setTicketImagePreview(null);
+                  setTicketCode("");
+                  setTicketUrl("");
+                }}
+                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all ${
+                  registrationMethod === "image"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-400"
+                }`}
+              >
+                사진 등록
               </button>
-              <button className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50">
-                <ImageIcon className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                <span className="text-xs font-bold text-slate-600 group-hover:text-blue-600">
-                  앨범 선택
-                </span>
+              <button
+                onClick={() => {
+                  setRegistrationMethod("code");
+                  setTicketImageFile(null);
+                  setTicketImagePreview(null);
+                  setTicketCode("");
+                  setTicketUrl("");
+                }}
+                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all ${
+                  registrationMethod === "code"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-400"
+                }`}
+              >
+                코드 입력
+              </button>
+              <button
+                onClick={() => {
+                  setRegistrationMethod("url");
+                  setTicketImageFile(null);
+                  setTicketImagePreview(null);
+                  setTicketCode("");
+                  setTicketUrl("");
+                }}
+                className={`flex-1 py-3 rounded-xl font-bold text-xs transition-all ${
+                  registrationMethod === "url"
+                    ? "bg-white text-blue-600 shadow-sm"
+                    : "text-slate-400"
+                }`}
+              >
+                URL 등록
               </button>
             </div>
-            <button
-              onClick={() => setShowUploadModal(false)}
-              className="w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-500"
-            >
-              닫기
-            </button>
+
+            {registrationMethod === "image" && !ticketImagePreview ? (
+              <>
+                <p className="text-xs text-slate-400 mb-8 font-medium">
+                  바코드, QR, 영수증 이미지를 선택하세요.
+                </p>
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <label className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50 active:scale-95 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleImageSelect(file);
+                        }
+                      }}
+                    />
+                    <Camera className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <span className="text-xs font-bold text-slate-600 group-hover:text-blue-600">
+                      카메라 촬영
+                    </span>
+                  </label>
+                  <label className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50 active:scale-95 cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleImageSelect(file);
+                        }
+                      }}
+                    />
+                    <ImageIcon className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors" />
+                    <span className="text-xs font-bold text-slate-600 group-hover:text-blue-600">
+                      앨범 선택
+                    </span>
+                  </label>
+                </div>
+              </>
+            ) : registrationMethod === "image" && ticketImagePreview ? (
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    티켓 타입
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setTicketType("QR")}
+                      className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest transition-all ${
+                        ticketType === "QR"
+                          ? "bg-blue-50 text-blue-600 border-blue-100"
+                          : "bg-slate-50 text-slate-400 border-slate-100"
+                      }`}
+                    >
+                      QR 코드
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTicketType("Barcode")}
+                      className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest transition-all ${
+                        ticketType === "Barcode"
+                          ? "bg-blue-50 text-blue-600 border-blue-100"
+                          : "bg-slate-50 text-slate-400 border-slate-100"
+                      }`}
+                    >
+                      바코드
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    코드 번호
+                  </label>
+                  <input
+                    type="text"
+                    value={ticketCode}
+                    onChange={(e) => setTicketCode(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="코드 번호를 입력하세요"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setRegistrationMethod("image");
+                      setTicketCode("");
+                    }}
+                    className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-500 active:scale-95"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!ticketCode.trim()) {
+                        alert("코드 번호를 입력해주세요.");
+                        return;
+                      }
+                      await handleTicketSubmit(null, ticketCode);
+                    }}
+                    disabled={isUploadingTicket}
+                    className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white shadow-xl shadow-blue-100 active:scale-95 disabled:opacity-50"
+                  >
+                    {isUploadingTicket ? "등록 중..." : "등록하기"}
+                  </button>
+                </div>
+              </div>
+            ) : registrationMethod === "code" ? (
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    티켓 타입
+                  </label>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setTicketType("QR")}
+                      className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest transition-all ${
+                        ticketType === "QR"
+                          ? "bg-blue-50 text-blue-600 border-blue-100"
+                          : "bg-slate-50 text-slate-400 border-slate-100"
+                      }`}
+                    >
+                      QR 코드
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTicketType("Barcode")}
+                      className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest transition-all ${
+                        ticketType === "Barcode"
+                          ? "bg-blue-50 text-blue-600 border-blue-100"
+                          : "bg-slate-50 text-slate-400 border-slate-100"
+                      }`}
+                    >
+                      바코드
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    코드 번호
+                  </label>
+                  <input
+                    type="text"
+                    value={ticketCode}
+                    onChange={(e) => setTicketCode(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="코드 번호를 입력하세요"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setRegistrationMethod("image");
+                      setTicketCode("");
+                    }}
+                    className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-500 active:scale-95"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!ticketCode.trim()) {
+                        alert("코드 번호를 입력해주세요.");
+                        return;
+                      }
+                      await handleTicketSubmit(null, ticketCode);
+                    }}
+                    disabled={isUploadingTicket}
+                    className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white shadow-xl shadow-blue-100 active:scale-95 disabled:opacity-50"
+                  >
+                    {isUploadingTicket ? "등록 중..." : "등록하기"}
+                  </button>
+                </div>
+              </div>
+            ) : registrationMethod === "url" ? (
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    URL 주소
+                  </label>
+                  <input
+                    type="url"
+                    value={ticketUrl}
+                    onChange={(e) => setTicketUrl(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="https://example.com/ticket"
+                    autoFocus
+                  />
+                  <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
+                    * 티켓 확인 URL을 입력하세요
+                  </p>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => {
+                      setRegistrationMethod("image");
+                      setTicketUrl("");
+                    }}
+                    className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-500 active:scale-95"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={async () => {
+                      if (!ticketUrl.trim()) {
+                        alert("URL을 입력해주세요.");
+                        return;
+                      }
+                      // URL 유효성 검증
+                      try {
+                        new URL(ticketUrl);
+                      } catch (e) {
+                        alert(
+                          "올바른 URL 형식을 입력해주세요. (http:// 또는 https://로 시작)"
+                        );
+                        return;
+                      }
+                      await handleTicketSubmit(null, ticketUrl, "url");
+                    }}
+                    disabled={isUploadingTicket}
+                    className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white shadow-xl shadow-blue-100 active:scale-95 disabled:opacity-50"
+                  >
+                    {isUploadingTicket ? "등록 중..." : "등록하기"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {registrationMethod === "image" && !ticketImagePreview && (
+              <button
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadTargetUser(null);
+                  setTicketImageFile(null);
+                  setTicketImagePreview(null);
+                  setTicketCode("");
+                  setTicketUrl("");
+                  setRegistrationMethod("image");
+                }}
+                className="w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-500 active:scale-95"
+              >
+                닫기
+              </button>
+            )}
           </div>
         </div>
       )}

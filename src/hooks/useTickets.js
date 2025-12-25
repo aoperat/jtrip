@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { logger } from '../lib/logger';
 
 export function useTickets(travelId) {
   const [ticketTypes, setTicketTypes] = useState([]);
@@ -26,7 +27,7 @@ export function useTickets(travelId) {
           filter: `travel_id=eq.${travelId}`,
         },
         (payload) => {
-          console.log('티켓 타입 변경 감지:', payload);
+          logger.realtime('티켓 타입 변경 감지', payload);
           fetchTickets();
         }
       )
@@ -38,7 +39,7 @@ export function useTickets(travelId) {
           table: 'registrations',
         },
         (payload) => {
-          console.log('티켓 등록 변경 감지:', payload);
+          logger.realtime('티켓 등록 변경 감지', payload);
           fetchTickets();
         }
       )
