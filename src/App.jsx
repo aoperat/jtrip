@@ -571,9 +571,9 @@ function App() {
                                       )}
                                     </button>
                                     <div
-                                      onClick={() =>
-                                        setSelectedItineraryItem(item)
-                                      }
+                                      onClick={() => {
+                                        setSelectedItineraryItem(item);
+                                      }}
                                       className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
                                         isChecked
                                           ? "opacity-40 bg-slate-50 border-slate-100"
@@ -581,7 +581,7 @@ function App() {
                                       }`}
                                     >
                                       <div
-                                        className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                        className="absolute top-2 right-2 flex gap-1 z-20"
                                         onClick={(e) => e.stopPropagation()}
                                       >
                                         <button
@@ -590,7 +590,8 @@ function App() {
                                             setSelectedItineraryItem(item);
                                             setShowEditItineraryModal(true);
                                           }}
-                                          className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                          title="수정"
                                         >
                                           <Edit2 className="w-3.5 h-3.5" />
                                         </button>
@@ -618,7 +619,8 @@ function App() {
                                               }
                                             }
                                           }}
-                                          className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                          title="삭제"
                                         >
                                           <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -738,7 +740,9 @@ function App() {
                               )}
                             </button>
                             <div
-                              onClick={() => setSelectedItineraryItem(item)}
+                              onClick={() => {
+                                setSelectedItineraryItem(item);
+                              }}
                               className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
                                 isChecked
                                   ? "opacity-40 bg-slate-50 border-slate-100"
@@ -746,7 +750,7 @@ function App() {
                               }`}
                             >
                               <div
-                                className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                className="absolute top-2 right-2 flex gap-1 z-20"
                                 onClick={(e) => e.stopPropagation()}
                               >
                                 <button
@@ -755,7 +759,8 @@ function App() {
                                     setSelectedItineraryItem(item);
                                     setShowEditItineraryModal(true);
                                   }}
-                                  className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                  title="수정"
                                 >
                                   <Edit2 className="w-3.5 h-3.5" />
                                 </button>
@@ -777,7 +782,8 @@ function App() {
                                       }
                                     }
                                   }}
-                                  className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                  title="삭제"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
                                 </button>
@@ -1761,7 +1767,7 @@ function App() {
       )}
 
       {/* -------------------- MODAL: ITINERARY DETAIL -------------------- */}
-      {selectedItineraryItem && selectedTripData && (
+      {selectedItineraryItem && selectedTripData && !showEditItineraryModal && (
         <ItineraryDetailModal
           item={selectedItineraryItem}
           trip={selectedTripData}
