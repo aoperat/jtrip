@@ -295,7 +295,6 @@ export default function ItineraryDetailModal({
           <button
             onClick={() => {
               onEdit();
-              onClose();
             }}
             className="flex-1 py-4 bg-blue-50 text-blue-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
           >

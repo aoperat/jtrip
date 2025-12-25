@@ -1891,11 +1891,12 @@ function App() {
           item={selectedItineraryItem}
           travelDays={travelDays}
           onClose={() => {
+            // 수정 모달만 닫고 상세보기 모달로 돌아감
             setShowEditItineraryModal(false);
-            setSelectedItineraryItem(null);
+            // selectedItineraryItem은 유지하여 상세보기 모달이 다시 표시되도록 함
           }}
           onUpdate={async (updates) => {
-            return await updateItineraryItem(selectedItineraryItem.id, {
+            const result = await updateItineraryItem(selectedItineraryItem.id, {
               day: updates.day,
               time: updates.time,
               title: updates.title,
@@ -1906,10 +1907,22 @@ function App() {
               longitude: updates.longitude,
               image_url: updates.imageUrl || null,
             });
+
+            // 업데이트 성공 시 selectedItineraryItem 업데이트
+            if (!result.error && result.data) {
+              setSelectedItineraryItem({
+                ...selectedItineraryItem,
+                ...result.data,
+                desc: result.data.description || selectedItineraryItem.desc,
+              });
+            }
+
+            return result;
           }}
           onDelete={async () => {
             const result = await deleteItineraryItem(selectedItineraryItem.id);
             if (!result.error) {
+              // 삭제 시 둘 다 닫음
               setShowEditItineraryModal(false);
               setSelectedItineraryItem(null);
             }
