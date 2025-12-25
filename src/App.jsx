@@ -46,6 +46,8 @@ import ItineraryDetailModal from "./components/ItineraryDetailModal";
 import InfoDetailModal from "./components/InfoDetailModal";
 import MapView from "./components/MapView";
 import SettingsView from "./components/SettingsView";
+import MemberManagementModal from "./components/MemberManagementModal";
+import InvitationBanner from "./components/InvitationBanner";
 import { useTravels } from "./hooks/useTravels";
 import { useItinerary } from "./hooks/useItinerary";
 import { useTickets } from "./hooks/useTickets";
@@ -63,6 +65,13 @@ function App() {
     createTravel,
     addParticipant,
     createInviteLink,
+    sendInvitation,
+    fetchMyInvitations,
+    fetchTravelInvitations,
+    acceptInvitation,
+    declineInvitation,
+    cancelInvitation,
+    removeParticipant,
   } = useTravels();
 
   const [view, setView] = useState("home");
@@ -101,8 +110,12 @@ function App() {
   const [showEditItineraryModal, setShowEditItineraryModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedItineraryItem, setSelectedItineraryItem] = useState(null);
+  const [isEditingFromDetail, setIsEditingFromDetail] = useState(false); // 상세보기에서 수정 모달을 열었는지 추적
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteEmail, setInviteEmail] = useState(null);
+  const [addingItineraryWithTime, setAddingItineraryWithTime] = useState(null);
+  const [addingItineraryDay, setAddingItineraryDay] = useState(null);
+  const [planGroupContext, setPlanGroupContext] = useState(null); // { groupId, variantKey }
 
   // 플랜 그룹 상태 (데이터베이스에서 가져옴)
   const {
@@ -520,69 +533,81 @@ function App() {
                 </p>
               </div>
             ) : (
-              travels.map((trip) => (
-                <div
-                  key={trip.id}
-                  onClick={() => openTrip(trip)}
-                  className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-all cursor-pointer group"
-                >
-                  <div className="h-36 relative">
-                    {trip.image ? (
-                      <img
-                        src={trip.image}
-                        alt={trip.title}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                        onError={(e) => {
-                          e.target.style.display = "none";
-                          e.target.nextElementSibling.style.display = "flex";
-                        }}
-                      />
-                    ) : null}
-                    <div
-                      className={`w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center ${
-                        trip.image ? "hidden" : ""
-                      }`}
-                    >
-                      <div className="text-center text-white">
-                        <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-80" />
-                        <p className="text-xs font-bold opacity-60">
-                          {trip.title}
+              <>
+                {/* 초대 배너 */}
+                <InvitationBanner
+                  fetchMyInvitations={fetchMyInvitations}
+                  acceptInvitation={acceptInvitation}
+                  declineInvitation={declineInvitation}
+                  addNotification={addNotification}
+                  onAccepted={() => {
+                    // 여행 목록 새로고침은 acceptInvitation에서 이미 처리됨
+                  }}
+                />
+                {travels.map((trip) => (
+                  <div
+                    key={trip.id}
+                    onClick={() => openTrip(trip)}
+                    className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-all cursor-pointer group"
+                  >
+                    <div className="h-36 relative">
+                      {trip.image ? (
+                        <img
+                          src={trip.image}
+                          alt={trip.title}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                            e.target.nextElementSibling.style.display = "flex";
+                          }}
+                        />
+                      ) : null}
+                      <div
+                        className={`w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center ${
+                          trip.image ? "hidden" : ""
+                        }`}
+                      >
+                        <div className="text-center text-white">
+                          <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-80" />
+                          <p className="text-xs font-bold opacity-60">
+                            {trip.title}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                      <div className="absolute bottom-4 left-4 text-white">
+                        <h3 className="text-xl font-bold">{trip.title}</h3>
+                        <p className="text-[10px] opacity-80 font-medium">
+                          {trip.date}
                         </p>
                       </div>
                     </div>
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                    <div className="absolute bottom-4 left-4 text-white">
-                      <h3 className="text-xl font-bold">{trip.title}</h3>
-                      <p className="text-[10px] opacity-80 font-medium">
-                        {trip.date}
-                      </p>
+                    <div className="p-4 flex justify-between items-center bg-white">
+                      <div className="flex -space-x-2">
+                        {trip.participants.map((p, i) => (
+                          <div
+                            key={i}
+                            className="w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold"
+                            title={p.name}
+                          >
+                            {typeof p.image === "string" &&
+                            p.image.startsWith("http") ? (
+                              <img
+                                src={p.image}
+                                alt={p.name}
+                                className="w-full h-full rounded-full object-cover"
+                              />
+                            ) : (
+                              p.image || p.name?.charAt(0)?.toUpperCase() || "U"
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <ChevronRight className="w-5 h-5 text-slate-200" />
                     </div>
                   </div>
-                  <div className="p-4 flex justify-between items-center bg-white">
-                    <div className="flex -space-x-2">
-                      {trip.participants.map((p, i) => (
-                        <div
-                          key={i}
-                          className="w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold"
-                          title={p.name}
-                        >
-                          {typeof p.image === "string" &&
-                          p.image.startsWith("http") ? (
-                            <img
-                              src={p.image}
-                              alt={p.name}
-                              className="w-full h-full rounded-full object-cover"
-                            />
-                          ) : (
-                            p.image || p.name?.charAt(0)?.toUpperCase() || "U"
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <ChevronRight className="w-5 h-5 text-slate-200" />
-                  </div>
-                </div>
-              ))
+                ))}
+              </>
             )}
             <button
               onClick={() => setShowCreateTripModal(true)}
@@ -655,7 +680,11 @@ function App() {
                       <Calendar className="w-5 h-5 text-blue-500" /> 일정
                     </h2>
                     <button
-                      onClick={() => setShowAddItineraryModal(true)}
+                      onClick={() => {
+                        setAddingItineraryDay(null);
+                        setAddingItineraryWithTime(null);
+                        setShowAddItineraryModal(true);
+                      }}
                       className="p-2 bg-blue-600 text-white rounded-xl active:scale-90 shadow-lg shadow-blue-100"
                     >
                       <Plus className="w-4 h-4" />
@@ -1003,12 +1032,15 @@ function App() {
                                           없습니다
                                         </p>
                                         <button
-                                          onClick={() =>
-                                            setAddingToGroup({
+                                          onClick={() => {
+                                            setAddingItineraryDay(group.day);
+                                            setAddingItineraryWithTime(null);
+                                            setPlanGroupContext({
                                               groupId: group.id,
                                               variantKey: group.activeVariant,
-                                            })
-                                          }
+                                            });
+                                            setShowAddItineraryModal(true);
+                                          }}
                                           className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
                                         >
                                           <Plus className="w-3.5 h-3.5" />
@@ -1020,64 +1052,123 @@ function App() {
                                         {(
                                           group.variants[group.activeVariant] ||
                                           []
-                                        ).map((item) => (
-                                          <div
-                                            key={item.id}
-                                            className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 relative group/item"
-                                          >
-                                            <div className="flex-1 min-w-0">
-                                              <p className="text-[9px] font-black text-blue-600 uppercase mb-0.5">
-                                                {item.time}
-                                              </p>
-                                              <h4 className="font-bold text-sm text-slate-800 truncate">
-                                                {item.title}
-                                              </h4>
-                                            </div>
-                                            {item.image && (
-                                              <img
-                                                src={item.image}
-                                                className="w-10 h-10 rounded-xl object-cover border border-slate-50"
-                                                alt=""
-                                              />
-                                            )}
-                                            {/* 수정/삭제 버튼 */}
-                                            <div className="flex gap-1">
-                                              <button
-                                                onClick={() =>
-                                                  setEditingVariantItem({
-                                                    groupId: group.id,
-                                                    variantKey:
-                                                      group.activeVariant,
-                                                    item,
-                                                  })
+                                        ).map((item) => {
+                                          // 원본 itinerary 아이템 찾기
+                                          const originalItem =
+                                            item.originalItineraryId
+                                              ? Object.values(
+                                                  selectedTripData?.itinerary ||
+                                                    {}
+                                                )
+                                                  .flat()
+                                                  .find(
+                                                    (it) =>
+                                                      it.id ===
+                                                      item.originalItineraryId
+                                                  )
+                                              : null;
+                                          const displayItem =
+                                            originalItem || item;
+
+                                          return (
+                                            <div
+                                              key={item.id}
+                                              onClick={(e) => {
+                                                // 버튼 클릭이 아닐 때만 상세 정보 표시
+                                                if (
+                                                  !e.target.closest("button")
+                                                ) {
+                                                  setSelectedItineraryItem(
+                                                    displayItem
+                                                  );
                                                 }
-                                                className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
-                                                title="수정"
+                                              }}
+                                              className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 relative group/item cursor-pointer active:scale-[0.98] transition-all"
+                                            >
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-[9px] font-black text-blue-600 uppercase mb-0.5">
+                                                  {item.time}
+                                                </p>
+                                                <h4 className="font-bold text-sm text-slate-800 truncate">
+                                                  {item.title}
+                                                </h4>
+                                              </div>
+                                              {item.image && (
+                                                <img
+                                                  src={item.image}
+                                                  className="w-10 h-10 rounded-xl object-cover border border-slate-50"
+                                                  alt=""
+                                                />
+                                              )}
+                                              {/* + / 수정 / 삭제 버튼 */}
+                                              <div
+                                                className="flex gap-1"
+                                                onClick={(e) =>
+                                                  e.stopPropagation()
+                                                }
                                               >
-                                                <Edit2 className="w-3.5 h-3.5" />
-                                              </button>
-                                              <button
-                                                onClick={() => {
-                                                  if (
-                                                    confirm(
-                                                      "일정을 삭제하시겠습니까?"
-                                                    )
-                                                  ) {
-                                                    handleDeleteVariantItem(
-                                                      group.id,
-                                                      group.activeVariant,
-                                                      item.id
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setAddingItineraryDay(
+                                                      group.day
                                                     );
-                                                  }
-                                                }}
-                                                className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                                title="삭제"
-                                              >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                              </button>
+                                                    setAddingItineraryWithTime(
+                                                      item.time || null
+                                                    );
+                                                    setPlanGroupContext({
+                                                      groupId: group.id,
+                                                      variantKey:
+                                                        group.activeVariant,
+                                                    });
+                                                    setShowAddItineraryModal(
+                                                      true
+                                                    );
+                                                  }}
+                                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
+                                                  title="일정 추가"
+                                                >
+                                                  <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingVariantItem({
+                                                      groupId: group.id,
+                                                      variantKey:
+                                                        group.activeVariant,
+                                                      item,
+                                                    });
+                                                  }}
+                                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                                  title="수정"
+                                                >
+                                                  <Edit2 className="w-3.5 h-3.5" />
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    if (
+                                                      confirm(
+                                                        "일정을 삭제하시겠습니까?"
+                                                      )
+                                                    ) {
+                                                      handleDeleteVariantItem(
+                                                        group.id,
+                                                        group.activeVariant,
+                                                        item.id
+                                                      );
+                                                    }
+                                                  }}
+                                                  className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                  title="삭제"
+                                                >
+                                                  <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                              </div>
                                             </div>
-                                          </div>
-                                        ))}
+                                          );
+                                        })}
                                         {/* 일정이 있을 때도 추가 버튼 표시 */}
                                         <button
                                           onClick={() =>
@@ -1172,7 +1263,6 @@ function App() {
                                         toggleSelection(item.id);
                                       } else {
                                         setSelectedItineraryItem(item);
-                                        setShowEditItineraryModal(true);
                                       }
                                     }}
                                     className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
@@ -1191,12 +1281,29 @@ function App() {
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
+                                            setAddingItineraryDay(selectedDay);
+                                            setAddingItineraryWithTime(
+                                              item.time || null
+                                            );
+                                            setPlanGroupContext(null);
+                                            setShowAddItineraryModal(true);
+                                          }}
+                                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
+                                          title="일정 추가"
+                                        >
+                                          <Plus className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
                                             setSelectedItineraryItem(item);
+                                            setIsEditingFromDetail(false); // 카드에서 직접 열었으므로 false
+                                            setShowEditItineraryModal(true);
                                           }}
                                           className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
-                                          title="상세 정보"
+                                          title="수정"
                                         >
-                                          <Info className="w-3.5 h-3.5" />
+                                          <Edit2 className="w-3.5 h-3.5" />
                                         </button>
                                         <button
                                           onClick={async (e) => {
@@ -1740,11 +1847,8 @@ function App() {
                           onClick={() => setSelectedNotice(notice)}
                           className="bg-orange-50 p-5 rounded-[32px] border border-orange-100 relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all"
                         >
-                          <div className="absolute top-0 right-0 p-3 opacity-10">
-                            <Megaphone className="w-10 h-10" />
-                          </div>
                           <div
-                            className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                            className="absolute top-2 right-2 flex gap-1 z-20"
                             onClick={(e) => e.stopPropagation()}
                           >
                             <button
@@ -1817,7 +1921,7 @@ function App() {
                             className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm relative group cursor-pointer active:scale-[0.98] transition-all"
                           >
                             <div
-                              className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                              className="absolute top-2 right-2 flex gap-1 z-20"
                               onClick={(e) => e.stopPropagation()}
                             >
                               <button
@@ -2377,8 +2481,25 @@ function App() {
           travelDays={travelDays}
           createItineraryItem={createItineraryItem}
           addNotification={addNotification}
-          setShowAddItineraryModal={setShowAddItineraryModal}
+          setShowAddItineraryModal={() => {
+            setShowAddItineraryModal(false);
+            setAddingItineraryWithTime(null);
+            setAddingItineraryDay(null);
+            setPlanGroupContext(null);
+          }}
           setSelectedDay={setSelectedDay}
+          defaultTime={addingItineraryWithTime || null}
+          defaultDay={addingItineraryDay || null}
+          planGroupContext={planGroupContext}
+          onAddToPlanGroup={async (newItem) => {
+            if (planGroupContext) {
+              await handleAddItemToVariant(
+                planGroupContext.groupId,
+                planGroupContext.variantKey,
+                newItem
+              );
+            }
+          }}
         />
       )}
 
@@ -2592,6 +2713,7 @@ function App() {
             }
           }}
           onEdit={() => {
+            setIsEditingFromDetail(true); // 상세보기에서 열었으므로 true
             setShowEditItineraryModal(true);
           }}
           onDelete={async () => {
@@ -2616,6 +2738,18 @@ function App() {
           }}
           onCreateInfo={() => {
             setShowAddInfoModal(true);
+          }}
+          onCreateItinerary={() => {
+            // 현재 일정의 시간과 날짜를 기본값으로 설정하여 일정 추가 모달 열기
+            const itemDay = Object.keys(selectedTripData?.itinerary || {}).find(
+              (day) =>
+                selectedTripData.itinerary[day]?.find(
+                  (it) => it.id === selectedItineraryItem.id
+                )
+            );
+            setAddingItineraryDay(itemDay ? parseInt(itemDay) : selectedDay);
+            setAddingItineraryWithTime(selectedItineraryItem.time || null);
+            setShowAddItineraryModal(true);
           }}
         />
       )}
@@ -2680,9 +2814,13 @@ function App() {
           item={selectedItineraryItem}
           travelDays={travelDays}
           onClose={() => {
-            // 수정 모달만 닫고 상세보기 모달로 돌아감
             setShowEditItineraryModal(false);
-            // selectedItineraryItem은 유지하여 상세보기 모달이 다시 표시되도록 함
+            // 상세보기에서 열었던 경우에만 selectedItineraryItem 유지
+            // 카드에서 직접 열었던 경우에는 null로 설정하여 상세보기 모달이 표시되지 않도록 함
+            if (!isEditingFromDetail) {
+              setSelectedItineraryItem(null);
+            }
+            setIsEditingFromDetail(false);
           }}
           onUpdate={async (updates) => {
             const result = await updateItineraryItem(selectedItineraryItem.id, {
@@ -2711,165 +2849,36 @@ function App() {
           onDelete={async () => {
             const result = await deleteItineraryItem(selectedItineraryItem.id);
             if (!result.error) {
-              // 삭제 시 둘 다 닫음
               setShowEditItineraryModal(false);
               setSelectedItineraryItem(null);
+              setIsEditingFromDetail(false);
             }
             return result;
           }}
         />
       )}
 
-      {/* -------------------- MODAL: INVITE USER -------------------- */}
+      {/* -------------------- MODAL: MEMBER MANAGEMENT -------------------- */}
       {showInviteModal && selectedTripData && (
-        <div className="absolute inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
-          <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
-            <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
-              사용자 초대 👥
-            </h2>
-
-            {inviteLink ? (
-              // 초대 링크 표시
-              <div className="space-y-6">
-                <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
-                  <p className="text-sm font-bold text-blue-900 mb-3">
-                    초대 링크가 생성되었습니다! 📧
-                  </p>
-                  <p className="text-xs text-blue-700 mb-4">
-                    {inviteEmail}로 초대 링크를 보내주세요.
-                  </p>
-                  <div className="bg-white p-4 rounded-xl border border-blue-200 mb-4">
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-2">
-                      초대 링크
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        readOnly
-                        value={inviteLink}
-                        className="flex-1 bg-slate-50 border-none rounded-lg px-3 py-2 text-xs font-mono text-slate-700"
-                        onClick={(e) => e.target.select()}
-                      />
-                      <button
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(inviteLink);
-                            addNotification("초대 링크가 복사되었습니다!");
-                          } catch (err) {
-                            // 폴백: 텍스트 선택
-                            const input =
-                              document.querySelector("input[readonly]");
-                            if (input) {
-                              input.select();
-                              document.execCommand("copy");
-                              addNotification("초대 링크가 복사되었습니다!");
-                            }
-                          }
-                        }}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-lg text-xs font-bold active:scale-95 transition-all"
-                      >
-                        복사
-                      </button>
-                    </div>
-                  </div>
-                  <a
-                    href={`mailto:${inviteEmail}?subject=${encodeURIComponent(
-                      `${selectedTripData.title} 여행 초대`
-                    )}&body=${encodeURIComponent(
-                      `안녕하세요!\n\n${selectedTripData.title} 여행에 초대합니다.\n\n아래 링크를 클릭하여 참여하세요:\n${inviteLink}`
-                    )}`}
-                    className="block w-full py-3 bg-blue-600 text-white rounded-xl text-sm font-bold text-center active:scale-95 transition-all"
-                  >
-                    이메일로 보내기 📧
-                  </a>
-                </div>
-                <button
-                  onClick={() => {
-                    setInviteLink(null);
-                    setInviteEmail(null);
-                  }}
-                  className="w-full py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
-                >
-                  닫기
-                </button>
-              </div>
-            ) : (
-              // 초대 폼
-              <form
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  const formData = new FormData(e.target);
-                  const email = formData.get("email");
-
-                  if (!email) {
-                    alert("이메일을 입력해주세요.");
-                    return;
-                  }
-
-                  try {
-                    const result = await addParticipant(selectedTripId, email);
-
-                    if (result.error) {
-                      alert("초대 실패: " + result.error.message);
-                    } else if (result.type === "user") {
-                      // 사용자 초대 성공
-                      addNotification("사용자가 초대되었습니다.");
-                      setShowInviteModal(false);
-                    } else if (result.type === "invite_link") {
-                      // 초대 링크 생성
-                      const link = createInviteLink(selectedTripId, email);
-                      setInviteLink(link);
-                      setInviteEmail(email);
-                    }
-                  } catch (error) {
-                    alert("오류가 발생했습니다: " + error.message);
-                  }
-                }}
-                className="space-y-4 mb-10"
-              >
-                <div>
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-                    이메일 주소
-                  </label>
-                  <input
-                    name="email"
-                    type="email"
-                    autoFocus
-                    required
-                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="user@example.com"
-                  />
-                  <p className="text-[10px] text-slate-300 mt-2 ml-1 font-medium leading-none">
-                    * 등록된 사용자는 즉시 초대되고,
-                    <br />
-                    등록되지 않은 이메일은 초대 링크가 생성됩니다.
-                  </p>
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowInviteModal(false);
-                      setInviteLink(null);
-                      setInviteEmail(null);
-                    }}
-                    className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-400 text-sm"
-                  >
-                    취소
-                  </button>
-                  <button
-                    type="submit"
-                    className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
-                  >
-                    초대하기
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
+        <MemberManagementModal
+          travel={{
+            ...selectedTripData,
+            id: selectedTripId,
+            created_by: travels.find((t) => t.id === selectedTripId)
+              ?.created_by,
+          }}
+          currentUserId={user?.id}
+          onClose={() => {
+            setShowInviteModal(false);
+            setInviteLink(null);
+            setInviteEmail(null);
+          }}
+          sendInvitation={sendInvitation}
+          fetchTravelInvitations={fetchTravelInvitations}
+          cancelInvitation={cancelInvitation}
+          removeParticipant={removeParticipant}
+          addNotification={addNotification}
+        />
       )}
 
       {/* -------------------- MODAL: CREATE TRIP -------------------- */}

@@ -14,6 +14,7 @@ import {
   DollarSign,
   Info,
   MoreVertical,
+  Plus,
 } from "lucide-react";
 
 export default function ItineraryDetailModal({
@@ -30,6 +31,7 @@ export default function ItineraryDetailModal({
   onCreatePrep,
   onCreateExpense,
   onCreateInfo,
+  onCreateItinerary,
 }) {
   if (!item) return null;
 
@@ -281,10 +283,10 @@ export default function ItineraryDetailModal({
       </main>
 
       <div className="absolute bottom-10 left-6 right-6 z-20">
-        <div className="flex gap-3 mb-3">
+        <div className="grid grid-cols-2 gap-3 mb-3">
           <button
             onClick={onToggleCheck}
-            className={`flex-1 py-4 rounded-[32px] font-black text-xs uppercase tracking-widest transition-all ${
+            className={`py-4 rounded-[32px] font-black text-xs uppercase tracking-widest transition-all ${
               isChecked
                 ? "bg-blue-600 text-white shadow-lg shadow-blue-100"
                 : "bg-slate-100 text-slate-400"
@@ -296,10 +298,19 @@ export default function ItineraryDetailModal({
             onClick={() => {
               onEdit();
             }}
-            className="flex-1 py-4 bg-blue-50 text-blue-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+            className="py-4 bg-blue-50 text-blue-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
           >
             <Edit2 className="w-4 h-4" />
             수정
+          </button>
+          <button
+            onClick={() => {
+              onCreateItinerary();
+            }}
+            className="py-4 bg-green-50 text-green-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            일정 추가
           </button>
           <button
             onClick={async () => {
@@ -310,7 +321,7 @@ export default function ItineraryDetailModal({
                 }
               }
             }}
-            className="flex-1 py-4 bg-red-50 text-red-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+            className="py-4 bg-red-50 text-red-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
           >
             <Trash2 className="w-4 h-4" />
             삭제

@@ -11,6 +11,10 @@ export default function AddItineraryModal({
   addNotification,
   setShowAddItineraryModal,
   setSelectedDay,
+  defaultTime,
+  defaultDay,
+  planGroupContext,
+  onAddToPlanGroup,
 }) {
   const [locationData, setLocationData] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
@@ -150,27 +154,48 @@ export default function AddItineraryModal({
         imageUrl = uploadResult.data.publicUrl;
       }
 
-      const result = await createItineraryItem({
-        day,
-        time: time || null,
-        title,
-        description,
-        locationName: locationData?.locationName || null,
-        address: locationData?.address || null,
-        latitude: locationData?.latitude || null,
-        longitude: locationData?.longitude || null,
-        imageUrl: imageUrl,
-      });
-
-      if (result.error) {
-        alert("일정 생성 실패: " + result.error.message);
-      } else {
-        addNotification("일정이 추가되었습니다.");
+      // 플랜 그룹 컨텍스트가 있으면 플랜 그룹에 직접 추가
+      if (planGroupContext && onAddToPlanGroup) {
+        const variantItem = {
+          title,
+          time: time || '',
+          image: imageUrl || null,
+          desc: description || null,
+          locationName: locationData?.locationName || null,
+          address: locationData?.address || null,
+          latitude: locationData?.latitude || null,
+          longitude: locationData?.longitude || null,
+        };
+        await onAddToPlanGroup(variantItem);
+        addNotification("플랜 그룹에 일정이 추가되었습니다.");
         setShowAddItineraryModal(false);
-        setSelectedDay(day);
         setLocationData(null);
         setImagePreview(null);
         setImageFile(null);
+      } else {
+        // 일반 일정으로 추가
+        const result = await createItineraryItem({
+          day,
+          time: time || null,
+          title,
+          description,
+          locationName: locationData?.locationName || null,
+          address: locationData?.address || null,
+          latitude: locationData?.latitude || null,
+          longitude: locationData?.longitude || null,
+          imageUrl: imageUrl,
+        });
+
+        if (result.error) {
+          alert("일정 생성 실패: " + result.error.message);
+        } else {
+          addNotification("일정이 추가되었습니다.");
+          setShowAddItineraryModal(false);
+          setSelectedDay(day);
+          setLocationData(null);
+          setImagePreview(null);
+          setImageFile(null);
+        }
       }
     } catch (error) {
       alert("오류가 발생했습니다: " + error.message);
@@ -226,6 +251,7 @@ export default function AddItineraryModal({
             <select
               name="day"
               required
+              defaultValue={defaultDay || ""}
               className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
             >
               <option value="">일차 선택</option>
@@ -244,6 +270,7 @@ export default function AddItineraryModal({
             <input
               name="time"
               type="time"
+              defaultValue={defaultTime || ""}
               className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
             />
           </div>

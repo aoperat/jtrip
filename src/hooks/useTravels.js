@@ -259,60 +259,268 @@ export function useTravels() {
     }
   };
 
-  const addParticipant = async (travelId, email) => {
+  // 초대장 생성 (기존 사용자/미가입 사용자 모두)
+  const sendInvitation = async (travelId, email) => {
     try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) throw new Error("로그인이 필요합니다.");
 
+      // 이미 초대가 있는지 확인
+      const { data: existingInvite } = await supabase
+        .from("travel_invitations")
+        .select("id, status")
+        .eq("travel_id", travelId)
+        .eq("invitee_email", email)
+        .maybeSingle();
+
+      if (existingInvite) {
+        if (existingInvite.status === "pending") {
+          throw new Error("이미 초대가 발송된 이메일입니다.");
+        }
+        if (existingInvite.status === "accepted") {
+          throw new Error("이미 참여 중인 사용자입니다.");
+        }
+      }
+
       // profiles 테이블에서 이메일로 사용자 찾기
-      const { data: profiles, error: profileError } = await supabase
+      const { data: profile } = await supabase
         .from("profiles")
-        .select("id, email")
+        .select("id, email, name")
         .eq("email", email)
         .maybeSingle();
 
-      // 사용자가 존재하는 경우
-      if (profiles && !profileError) {
-        // 참여자 추가
-        const { error: addError } = await supabase
-          .from("travel_participants")
-          .insert({
-            travel_id: travelId,
-            user_id: profiles.id,
-          });
+      const isRegisteredUser = !!profile;
 
-        if (addError) {
-          if (addError.code === "23505") {
-            throw new Error("이미 참여 중인 사용자입니다.");
-          }
-          throw addError;
+      // 토큰 생성 (미가입 사용자를 위해)
+      const token = btoa(`${travelId}:${email}:${Date.now()}`).replace(
+        /[+/=]/g,
+        ""
+      );
+
+      // 초대 레코드 생성
+      const { data: invitation, error: inviteError } = await supabase
+        .from("travel_invitations")
+        .insert({
+          travel_id: travelId,
+          inviter_id: user.id,
+          invitee_email: email,
+          invitee_id: profile?.id || null,
+          token: isRegisteredUser ? null : token,
+          status: "pending",
+        })
+        .select()
+        .single();
+
+      if (inviteError) {
+        if (inviteError.code === "23505") {
+          throw new Error("이미 초대된 사용자입니다.");
         }
-
-        await fetchTravels();
-        return { error: null, type: "user" }; // 사용자 초대 성공
+        if (inviteError.code === "42P01" || inviteError.message?.includes("does not exist")) {
+          throw new Error("초대 기능을 사용하려면 데이터베이스 설정이 필요합니다. (travel_invitations 테이블)");
+        }
+        throw inviteError;
       }
 
-      // 사용자가 없는 경우 - 초대 링크 생성
-      return { error: null, type: "invite_link", email };
+      if (isRegisteredUser) {
+        return {
+          error: null,
+          type: "registered",
+          message: `${profile.name || email}님에게 초대를 보냈습니다.`,
+        };
+      } else {
+        const inviteUrl = `${window.location.origin}${
+          import.meta.env.BASE_URL || "/"
+        }?invite=${token}`;
+        return {
+          error: null,
+          type: "unregistered",
+          inviteUrl,
+          message: "가입되지 않은 이메일입니다. 초대 링크를 공유해주세요.",
+        };
+      }
     } catch (err) {
-      console.error("참여자 추가 실패:", err);
+      console.error("초대 실패:", err);
       return { error: err };
     }
   };
 
+  // 내가 받은 초대 목록 가져오기
+  const fetchMyInvitations = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return { data: [], error: null };
+
+      // 테이블이 존재하지 않을 수 있으므로 기본 쿼리만 사용
+      const { data: invitations, error } = await supabase
+        .from("travel_invitations")
+        .select("*")
+        .or(`invitee_id.eq.${user.id},invitee_email.eq.${user.email}`)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      // 테이블이 없거나 에러가 있으면 빈 배열 반환
+      if (error) {
+        // 테이블이 없거나 권한 문제 등 - 조용히 빈 배열 반환
+        if (
+          error.code === "42P01" ||
+          error.code?.startsWith("PGRST") ||
+          error.message?.includes("does not exist") ||
+          error.message?.includes("permission denied")
+        ) {
+          return { data: [], error: null };
+        }
+        throw error;
+      }
+
+      if (!invitations || invitations.length === 0) {
+        return { data: [], error: null };
+      }
+
+      // 여행 정보 가져오기
+      const travelIds = [...new Set(invitations.map((inv) => inv.travel_id))];
+      const { data: travelsData } = await supabase
+        .from("travels")
+        .select("id, title, start_date, end_date, image_url")
+        .in("id", travelIds);
+
+      const travelsMap = new Map((travelsData || []).map((t) => [t.id, t]));
+
+      // 초대자 프로필 가져오기
+      const inviterIds = [...new Set(invitations.map((inv) => inv.inviter_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, email, name, avatar_url")
+        .in("id", inviterIds);
+
+      const profilesMap = new Map((profilesData || []).map((p) => [p.id, p]));
+
+      // 데이터 조합
+      const invitationsWithData = invitations.map((inv) => ({
+        ...inv,
+        travels: travelsMap.get(inv.travel_id) || null,
+        inviter: profilesMap.get(inv.inviter_id) || null,
+      }));
+
+      return { data: invitationsWithData, error: null };
+    } catch (err) {
+      console.error("초대 목록 가져오기 실패:", err);
+      return { data: [], error: err };
+    }
+  };
+
+  // 특정 여행의 초대 목록 가져오기
+  const fetchTravelInvitations = async (travelId) => {
+    try {
+      const { data: invitations, error } = await supabase
+        .from("travel_invitations")
+        .select("*")
+        .eq("travel_id", travelId)
+        .order("created_at", { ascending: false });
+
+      // 테이블이 없거나 에러가 있으면 빈 배열 반환
+      if (error) {
+        // 테이블이 없거나 권한 문제 등 - 조용히 빈 배열 반환
+        if (
+          error.code === "42P01" ||
+          error.code?.startsWith("PGRST") ||
+          error.message?.includes("does not exist") ||
+          error.message?.includes("permission denied")
+        ) {
+          return { data: [], error: null };
+        }
+        throw error;
+      }
+      return { data: invitations || [], error: null };
+    } catch (err) {
+      console.error("여행 초대 목록 가져오기 실패:", err);
+      return { data: [], error: err };
+    }
+  };
+
+  // 초대 수락
+  const acceptInvitation = async (invitationId) => {
+    try {
+      const { data, error } = await supabase.rpc("accept_travel_invitation", {
+        invitation_id: invitationId,
+      });
+
+      if (error) throw error;
+
+      await fetchTravels();
+      return { error: null };
+    } catch (err) {
+      console.error("초대 수락 실패:", err);
+      return { error: err };
+    }
+  };
+
+  // 초대 거절
+  const declineInvitation = async (invitationId) => {
+    try {
+      const { data, error } = await supabase.rpc("decline_travel_invitation", {
+        invitation_id: invitationId,
+      });
+
+      if (error) throw error;
+      return { error: null };
+    } catch (err) {
+      console.error("초대 거절 실패:", err);
+      return { error: err };
+    }
+  };
+
+  // 초대 취소
+  const cancelInvitation = async (invitationId) => {
+    try {
+      const { error } = await supabase
+        .from("travel_invitations")
+        .delete()
+        .eq("id", invitationId);
+
+      if (error) throw error;
+      return { error: null };
+    } catch (err) {
+      console.error("초대 취소 실패:", err);
+      return { error: err };
+    }
+  };
+
+  // 참여자 제거
+  const removeParticipant = async (travelId, userId) => {
+    try {
+      const { error } = await supabase
+        .from("travel_participants")
+        .delete()
+        .eq("travel_id", travelId)
+        .eq("user_id", userId);
+
+      if (error) throw error;
+      await fetchTravels();
+      return { error: null };
+    } catch (err) {
+      console.error("참여자 제거 실패:", err);
+      return { error: err };
+    }
+  };
+
+  // 레거시 호환용 - 직접 추가 (기존 기능)
+  const addParticipant = async (travelId, email) => {
+    // 새로운 초대 시스템 사용
+    return sendInvitation(travelId, email);
+  };
+
   const createInviteLink = (travelId, email) => {
-    // 간단한 토큰 생성 (실제로는 더 안전한 방법 사용 권장)
     const token = btoa(`${travelId}:${email}:${Date.now()}`).replace(
       /[+/=]/g,
       ""
     );
-    const inviteUrl = `${
-      window.location.origin
-    }/invite?token=${token}&travel=${travelId}&email=${encodeURIComponent(
-      email
-    )}`;
+    const inviteUrl = `${window.location.origin}${
+      import.meta.env.BASE_URL || "/"
+    }?invite=${token}`;
     return inviteUrl;
   };
 
@@ -326,5 +534,13 @@ export function useTravels() {
     addParticipant,
     createInviteLink,
     refetch: fetchTravels,
+    // 새로운 초대 시스템
+    sendInvitation,
+    fetchMyInvitations,
+    fetchTravelInvitations,
+    acceptInvitation,
+    declineInvitation,
+    cancelInvitation,
+    removeParticipant,
   };
 }
