@@ -52,6 +52,7 @@ import { useTickets } from "./hooks/useTickets";
 import { useExpenses } from "./hooks/useExpenses";
 import { usePreparations } from "./hooks/usePreparations";
 import { useSharedInfo } from "./hooks/useSharedInfo";
+import { usePlanGroups } from "./hooks/usePlanGroups";
 import { useAuth } from "./hooks/useAuth";
 
 function App() {
@@ -101,8 +102,15 @@ function App() {
   const [inviteLink, setInviteLink] = useState(null);
   const [inviteEmail, setInviteEmail] = useState(null);
 
-  // 플랜 그룹 상태
-  const [planGroups, setPlanGroups] = useState([]); // [{id, day, variants: {A:[], B:[], C:[]}, activeVariant: 'A'}]
+  // 플랜 그룹 상태 (데이터베이스에서 가져옴)
+  const {
+    planGroups,
+    loading: planGroupsLoading,
+    createPlanGroup: createPlanGroupDb,
+    updatePlanGroup: updatePlanGroupDb,
+    deletePlanGroup: deletePlanGroupDb,
+    updatePlanGroupVariant: updatePlanGroupVariantDb,
+  } = usePlanGroups(selectedTripId);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -214,76 +222,175 @@ function App() {
     }
   };
 
-  const handleCreatePlanGroup = () => {
+  const handleCreatePlanGroup = async () => {
     if (selectedIds.length < 1) {
       addNotification("그룹화하려면 최소 1개 이상의 일정을 선택하세요.");
       return;
     }
-    const selectedItems = itinerary.filter((item) =>
+    const allItems = Object.values(itinerary || {}).flat();
+    const selectedItems = allItems.filter((item) =>
       selectedIds.includes(item.id)
     );
+
+    // 원본 일정 ID를 참조하도록 변환
+    const itemsWithRef = selectedItems.map((item) => ({
+      ...item,
+      originalItineraryId: item.id, // 원본 일정 ID 저장
+    }));
+
     const newGroup = {
-      id: `g-${Date.now()}`,
       day: selectedDay,
       travelId: selectedTripId,
       variants: {
-        A: selectedItems,
-        B: [],
-        C: [],
+        A: itemsWithRef,
+        B: null,
+        C: null,
       },
       activeVariant: "A",
     };
-    setPlanGroups([...planGroups, newGroup]);
-    setSelectionMode(false);
-    setSelectedIds([]);
-    addNotification("플랜 A 그룹이 생성되었습니다! 📁");
+
+    const result = await createPlanGroupDb(newGroup);
+    if (result.error) {
+      alert("플랜 그룹 생성 실패: " + result.error.message);
+    } else {
+      setSelectionMode(false);
+      setSelectedIds([]);
+      addNotification("플랜 A 그룹이 생성되었습니다! 📁");
+    }
   };
 
-  const handleAddVariant = (groupId, variantKey) => {
-    // 새 플랜 변형 생성 - 기존 A 플랜 복사 후 수정 가능하게
+  const handleAddVariant = async (groupId, variantKey) => {
+    // 새 플랜 변형 생성 - 플랜 A를 복사해서 시작
+    const group = planGroups.find((g) => g.id === groupId);
+    if (!group || !group.variants.A) return;
+
+    // 플랜 A를 복사하여 새 variant 생성
+    const copiedItems = group.variants.A.map((item) => ({
+      ...item,
+      id: `${item.originalItineraryId || item.id}-${variantKey}-${Date.now()}`,
+      originalItineraryId: item.originalItineraryId || item.id,
+    }));
+
+    // variant 저장
+    const result = await updatePlanGroupVariantDb(
+      groupId,
+      variantKey,
+      copiedItems
+    );
+    if (result.error) {
+      alert("플랜 variant 생성 실패: " + result.error.message);
+    } else {
+      // activeVariant 업데이트
+      await updatePlanGroupDb(groupId, { activeVariant: variantKey });
+      addNotification(`플랜 ${variantKey}가 생성되었습니다! (플랜 A 복사됨)`);
+    }
+  };
+
+  // 플랜 그룹에 일정 추가
+  const [addingToGroup, setAddingToGroup] = useState(null); // { groupId, variantKey }
+
+  const handleAddItemToVariant = async (groupId, variantKey, item) => {
     const group = planGroups.find((g) => g.id === groupId);
     if (!group) return;
 
-    const newGroups = planGroups.map((g) => {
-      if (g.id === groupId) {
-        return {
-          ...g,
-          variants: {
-            ...g.variants,
-            [variantKey]: g.variants.A.map((item) => ({
-              ...item,
-              id: `${item.id}-${variantKey}`,
-              title: `${item.title} (${variantKey})`,
-            })),
-          },
-          activeVariant: variantKey,
-        };
-      }
-      return g;
-    });
-    setPlanGroups(newGroups);
-    addNotification(`플랜 ${variantKey}가 생성되었습니다!`);
-  };
+    const currentItems = group.variants[variantKey] || [];
+    const newItem = {
+      ...item,
+      id: `${Date.now()}-${variantKey}-${Date.now()}`,
+    };
 
-  const setVariantActive = (groupId, variantKey) => {
-    setPlanGroups(
-      planGroups.map((g) =>
-        g.id === groupId ? { ...g, activeVariant: variantKey } : g
-      )
+    const updatedItems = [...currentItems, newItem];
+
+    const result = await updatePlanGroupVariantDb(
+      groupId,
+      variantKey,
+      updatedItems
     );
+    if (result.error) {
+      alert("일정 추가 실패: " + result.error.message);
+    } else {
+      setAddingToGroup(null);
+    }
   };
 
-  const deleteGroup = (groupId) => {
+  const setVariantActive = async (groupId, variantKey) => {
+    const result = await updatePlanGroupDb(groupId, {
+      activeVariant: variantKey,
+    });
+    if (result.error) {
+      alert("활성 variant 변경 실패: " + result.error.message);
+    }
+  };
+
+  const deleteGroup = async (groupId) => {
     if (confirm("이 플랜 그룹을 삭제하시겠습니까?")) {
-      setPlanGroups(planGroups.filter((g) => g.id !== groupId));
-      addNotification("플랜 그룹이 삭제되었습니다.");
+      const result = await deletePlanGroupDb(groupId);
+      if (result.error) {
+        alert("플랜 그룹 삭제 실패: " + result.error.message);
+      } else {
+        addNotification("플랜 그룹이 삭제되었습니다.");
+      }
+    }
+  };
+
+  // 플랜 그룹에서 일정 삭제
+  const handleDeleteVariantItem = async (groupId, variantKey, itemId) => {
+    const group = planGroups.find((g) => g.id === groupId);
+    if (!group || !group.variants[variantKey]) return;
+
+    const updatedItems = group.variants[variantKey].filter(
+      (item) => item.id !== itemId
+    );
+
+    const result = await updatePlanGroupVariantDb(
+      groupId,
+      variantKey,
+      updatedItems
+    );
+    if (result.error) {
+      alert("일정 삭제 실패: " + result.error.message);
+    } else {
+      addNotification("일정이 삭제되었습니다.");
+    }
+  };
+
+  // 플랜 그룹에서 일정 수정
+  const [editingVariantItem, setEditingVariantItem] = useState(null); // { groupId, variantKey, item }
+
+  const handleUpdateVariantItem = async (
+    groupId,
+    variantKey,
+    itemId,
+    updates
+  ) => {
+    const group = planGroups.find((g) => g.id === groupId);
+    if (!group || !group.variants[variantKey]) return;
+
+    const updatedItems = group.variants[variantKey].map((item) =>
+      item.id === itemId ? { ...item, ...updates } : item
+    );
+
+    const result = await updatePlanGroupVariantDb(
+      groupId,
+      variantKey,
+      updatedItems
+    );
+    if (result.error) {
+      alert("일정 수정 실패: " + result.error.message);
+    } else {
+      setEditingVariantItem(null);
+      addNotification("일정이 수정되었습니다.");
     }
   };
 
   // 현재 선택된 날짜에서 그룹화된 아이템 ID 목록
   const groupedItemIds = planGroups
     .filter((g) => g.day === selectedDay && g.travelId === selectedTripId)
-    .flatMap((g) => g.variants.A.map((item) => item.id));
+    .flatMap((g) =>
+      (g.variants.A || [])
+        .map((item) => item.originalItineraryId || item.id)
+        .filter(Boolean)
+    );
 
   const toggleItemCheck = async (id) => {
     const next = new Set(checkedItems);
@@ -841,26 +948,32 @@ function App() {
                                 <div className="bg-blue-50 rounded-3xl p-4 border-2 border-blue-200 shadow-sm">
                                   <div className="flex items-center justify-between mb-3">
                                     <div className="flex gap-2">
-                                      {["A", "B", "C"].map((v) => (
-                                        <button
-                                          key={v}
-                                          onClick={() =>
-                                            setVariantActive(group.id, v)
-                                          }
-                                          disabled={
-                                            group.variants[v].length === 0
-                                          }
-                                          className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-black uppercase transition-all ${
-                                            group.activeVariant === v
-                                              ? "bg-blue-600 text-white shadow-lg"
-                                              : group.variants[v].length > 0
-                                              ? "bg-white text-slate-400 hover:bg-blue-100"
-                                              : "bg-slate-100 text-slate-200 cursor-not-allowed"
-                                          }`}
-                                        >
-                                          {v}
-                                        </button>
-                                      ))}
+                                      {["A", "B", "C"].map((v) => {
+                                        const variant = group.variants[v];
+                                        const isCreated = variant !== null;
+                                        const hasItems =
+                                          isCreated && variant.length > 0;
+                                        return (
+                                          <button
+                                            key={v}
+                                            onClick={() =>
+                                              setVariantActive(group.id, v)
+                                            }
+                                            disabled={!isCreated}
+                                            className={`w-8 h-8 rounded-xl flex items-center justify-center text-[11px] font-black uppercase transition-all ${
+                                              group.activeVariant === v
+                                                ? "bg-blue-600 text-white shadow-lg"
+                                                : isCreated
+                                                ? hasItems
+                                                  ? "bg-white text-slate-400 hover:bg-blue-100"
+                                                  : "bg-blue-100 text-blue-400 hover:bg-blue-200"
+                                                : "bg-slate-100 text-slate-200 cursor-not-allowed"
+                                            }`}
+                                          >
+                                            {v}
+                                          </button>
+                                        );
+                                      })}
                                     </div>
                                     <div className="flex items-center gap-2">
                                       <span className="text-[9px] font-black text-blue-500 uppercase tracking-widest bg-white px-2 py-1 rounded-full">
@@ -876,34 +989,108 @@ function App() {
                                   </div>
 
                                   <div className="space-y-2">
-                                    {group.variants[group.activeVariant].map(
-                                      (item) => (
-                                        <div
-                                          key={item.id}
-                                          className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3"
+                                    {(group.variants[group.activeVariant] || [])
+                                      .length === 0 ? (
+                                      <div className="text-center py-4">
+                                        <p className="text-slate-400 text-xs mb-3">
+                                          플랜 {group.activeVariant}에 일정이
+                                          없습니다
+                                        </p>
+                                        <button
+                                          onClick={() =>
+                                            setAddingToGroup({
+                                              groupId: group.id,
+                                              variantKey: group.activeVariant,
+                                            })
+                                          }
+                                          className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-xl hover:bg-blue-700 transition-colors"
                                         >
-                                          <div className="flex-1 min-w-0">
-                                            <p className="text-[9px] font-black text-blue-600 uppercase mb-0.5">
-                                              {item.time}
-                                            </p>
-                                            <h4 className="font-bold text-sm text-slate-800 truncate">
-                                              {item.title}
-                                            </h4>
+                                          <Plus className="w-3.5 h-3.5" />
+                                          일정 추가하기
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        {(
+                                          group.variants[group.activeVariant] ||
+                                          []
+                                        ).map((item) => (
+                                          <div
+                                            key={item.id}
+                                            className="bg-white p-3 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 relative group/item"
+                                          >
+                                            <div className="flex-1 min-w-0">
+                                              <p className="text-[9px] font-black text-blue-600 uppercase mb-0.5">
+                                                {item.time}
+                                              </p>
+                                              <h4 className="font-bold text-sm text-slate-800 truncate">
+                                                {item.title}
+                                              </h4>
+                                            </div>
+                                            {item.image && (
+                                              <img
+                                                src={item.image}
+                                                className="w-10 h-10 rounded-xl object-cover border border-slate-50"
+                                                alt=""
+                                              />
+                                            )}
+                                            {/* 수정/삭제 버튼 */}
+                                            <div className="flex gap-1">
+                                              <button
+                                                onClick={() =>
+                                                  setEditingVariantItem({
+                                                    groupId: group.id,
+                                                    variantKey:
+                                                      group.activeVariant,
+                                                    item,
+                                                  })
+                                                }
+                                                className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                                title="수정"
+                                              >
+                                                <Edit2 className="w-3.5 h-3.5" />
+                                              </button>
+                                              <button
+                                                onClick={() => {
+                                                  if (
+                                                    confirm(
+                                                      "일정을 삭제하시겠습니까?"
+                                                    )
+                                                  ) {
+                                                    handleDeleteVariantItem(
+                                                      group.id,
+                                                      group.activeVariant,
+                                                      item.id
+                                                    );
+                                                  }
+                                                }}
+                                                className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                title="삭제"
+                                              >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                              </button>
+                                            </div>
                                           </div>
-                                          {item.image && (
-                                            <img
-                                              src={item.image}
-                                              className="w-10 h-10 rounded-xl object-cover border border-slate-50"
-                                              alt=""
-                                            />
-                                          )}
-                                        </div>
-                                      )
+                                        ))}
+                                        {/* 일정이 있을 때도 추가 버튼 표시 */}
+                                        <button
+                                          onClick={() =>
+                                            setAddingToGroup({
+                                              groupId: group.id,
+                                              variantKey: group.activeVariant,
+                                            })
+                                          }
+                                          className="w-full py-2 border border-dashed border-slate-200 rounded-xl text-[10px] font-bold text-slate-400 hover:border-blue-300 hover:text-blue-500 transition-all flex items-center justify-center gap-1.5"
+                                        >
+                                          <Plus className="w-3 h-3" />
+                                          일정 추가
+                                        </button>
+                                      </>
                                     )}
                                   </div>
 
                                   {/* 플랜 B/C 생성 버튼 */}
-                                  {group.variants.B.length === 0 && (
+                                  {group.variants.B === null && (
                                     <button
                                       onClick={() =>
                                         handleAddVariant(group.id, "B")
@@ -914,8 +1101,8 @@ function App() {
                                       생성하기
                                     </button>
                                   )}
-                                  {group.variants.B.length > 0 &&
-                                    group.variants.C.length === 0 && (
+                                  {group.variants.B !== null &&
+                                    group.variants.C === null && (
                                       <button
                                         onClick={() =>
                                           handleAddVariant(group.id, "C")
@@ -2052,6 +2239,159 @@ function App() {
           setShowAddItineraryModal={setShowAddItineraryModal}
           setSelectedDay={setSelectedDay}
         />
+      )}
+
+      {/* -------------------- MODAL: ADD ITEM TO PLAN VARIANT -------------------- */}
+      {addingToGroup && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center"
+          onClick={() => setAddingToGroup(null)}
+        >
+          <div
+            className="bg-white w-full max-w-lg rounded-t-[32px] p-6 animate-in slide-in-from-bottom-10 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+            <h3 className="text-lg font-black text-slate-800 mb-4">
+              플랜 {addingToGroup.variantKey}에 일정 추가
+            </h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const title = formData.get("title");
+                const time = formData.get("time");
+                if (!title.trim()) {
+                  addNotification("일정 제목을 입력해주세요.");
+                  return;
+                }
+                handleAddItemToVariant(
+                  addingToGroup.groupId,
+                  addingToGroup.variantKey,
+                  { title: title.trim(), time: time || "" }
+                );
+                addNotification(
+                  `플랜 ${addingToGroup.variantKey}에 일정이 추가되었습니다!`
+                );
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                  시간
+                </label>
+                <input
+                  type="time"
+                  name="time"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                  일정 제목 *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  placeholder="예: 도쿄타워 방문"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setAddingToGroup(null)}
+                  className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors"
+                >
+                  추가하기
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------- MODAL: EDIT PLAN VARIANT ITEM -------------------- */}
+      {editingVariantItem && (
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center"
+          onClick={() => setEditingVariantItem(null)}
+        >
+          <div
+            className="bg-white w-full max-w-lg rounded-t-[32px] p-6 animate-in slide-in-from-bottom-10 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
+            <h3 className="text-lg font-black text-slate-800 mb-4">
+              플랜 {editingVariantItem.variantKey} 일정 수정
+            </h3>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const formData = new FormData(e.target);
+                const title = formData.get("title");
+                const time = formData.get("time");
+                if (!title.trim()) {
+                  addNotification("일정 제목을 입력해주세요.");
+                  return;
+                }
+                handleUpdateVariantItem(
+                  editingVariantItem.groupId,
+                  editingVariantItem.variantKey,
+                  editingVariantItem.item.id,
+                  { title: title.trim(), time: time || "" }
+                );
+              }}
+              className="space-y-4"
+            >
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                  시간
+                </label>
+                <input
+                  type="time"
+                  name="time"
+                  defaultValue={editingVariantItem.item.time || ""}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 mb-1.5">
+                  일정 제목 *
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  defaultValue={editingVariantItem.item.title}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
+                  autoFocus
+                />
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingVariantItem(null)}
+                  className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors"
+                >
+                  취소
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors"
+                >
+                  수정하기
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* -------------------- FLOATING: SELECTION ACTION BAR -------------------- */}
