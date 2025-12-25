@@ -10,6 +10,7 @@ const CreateLinkModal = ({
   isExpense,
   travelId,
   itinerary,
+  participants,
   onCreate,
   onUpdate,
   initialData,
@@ -19,6 +20,7 @@ const CreateLinkModal = ({
   const [content, setContent] = useState(initialData?.content || '');
   const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
   const [prepType, setPrepType] = useState(initialData?.type || 'common');
+  const [assignedTo, setAssignedTo] = useState(initialData?.assignedTo || '');
   const [category, setCategory] = useState(initialData?.category || 'Tip');
   const [ticketMode, setTicketMode] = useState(initialData?.mode || 'individual');
   const [linkedItineraryId, setLinkedItineraryId] = useState(initialData?.linkedItineraryId || defaultLinkedItineraryId || '');
@@ -70,6 +72,7 @@ const CreateLinkModal = ({
           content: name,
           type: prepType,
           linkedItineraryId: linkedItineraryId || null,
+          assignedTo: prepType === 'common' ? (assignedTo || null) : null,
         };
       } else if (isInfo) {
         data = {
@@ -161,30 +164,52 @@ const CreateLinkModal = ({
           </div>
           
           {isPrep && (
-            <div className="grid grid-cols-2 gap-3">
-              <button 
-                type="button"
-                onClick={() => setPrepType('common')}
-                className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest tracking-tighter leading-none transition-all ${
-                  prepType === 'common'
-                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                    : 'bg-slate-50 text-slate-400 border-slate-100'
-                }`}
-              >
-                Common
-              </button>
-              <button 
-                type="button"
-                onClick={() => setPrepType('personal')}
-                className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest tracking-tighter leading-none transition-all ${
-                  prepType === 'personal'
-                    ? 'bg-blue-50 text-blue-600 border-blue-100'
-                    : 'bg-slate-50 text-slate-400 border-slate-100'
-                }`}
-              >
-                Personal
-              </button>
-            </div>
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <button 
+                  type="button"
+                  onClick={() => setPrepType('common')}
+                  className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest tracking-tighter leading-none transition-all ${
+                    prepType === 'common'
+                      ? 'bg-blue-50 text-blue-600 border-blue-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-100'
+                  }`}
+                >
+                  Common
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setPrepType('personal')}
+                  className={`py-4 rounded-2xl font-bold text-xs border uppercase tracking-widest tracking-tighter leading-none transition-all ${
+                    prepType === 'personal'
+                      ? 'bg-blue-50 text-blue-600 border-blue-100'
+                      : 'bg-slate-50 text-slate-400 border-slate-100'
+                  }`}
+                >
+                  Personal
+                </button>
+              </div>
+              
+              {prepType === 'common' && participants && participants.length > 0 && (
+                <div>
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                    담당자 (선택사항)
+                  </label>
+                  <select
+                    value={assignedTo}
+                    onChange={(e) => setAssignedTo(e.target.value)}
+                    className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                  >
+                    <option value="">담당자 미지정</option>
+                    {participants.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name || p.email?.split('@')[0] || 'Unknown'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
           )}
 
           {!isPrep && !isInfo && !isExpense && (

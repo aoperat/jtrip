@@ -148,7 +148,7 @@ function App() {
     createPreparation,
     updatePreparation,
     deletePreparation: deletePreparationItem,
-  } = usePreparations(selectedTripId);
+  } = usePreparations(selectedTripId, user?.id);
   const {
     sharedInfo,
     notices,
@@ -1597,8 +1597,8 @@ function App() {
                     </div>
                   ) : (
                     [
-                      { key: "common", label: "Common Items" },
-                      { key: "personal", label: "Personal Items" },
+                      { key: "common", label: "Common Items 🤝" },
+                      { key: "personal", label: "Personal Items 👤" },
                     ].map((group) => (
                       <div key={group.key} className="space-y-2">
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
@@ -1681,9 +1681,17 @@ function App() {
                                   >
                                     {prep.content}
                                   </p>
-                                  {linkedName && (
-                                    <LinkBadge label={linkedName} />
-                                  )}
+                                  <div className="flex items-center gap-2 mt-1">
+                                    {prep.type === "common" &&
+                                      prep.assignedToName && (
+                                        <span className="text-[9px] font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                                          담당: {prep.assignedToName}
+                                        </span>
+                                      )}
+                                    {linkedName && (
+                                      <LinkBadge label={linkedName} />
+                                    )}
+                                  </div>
                                 </div>
                               </div>
                             );
@@ -1985,6 +1993,7 @@ function App() {
           isPrep
           travelId={selectedTripId}
           itinerary={itinerary}
+          participants={selectedTripData?.participants || []}
           defaultLinkedItineraryId={selectedItineraryItem?.id || null}
           initialData={editingPrep || null}
           onCreate={async (data) => {
