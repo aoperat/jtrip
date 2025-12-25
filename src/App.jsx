@@ -92,6 +92,8 @@ function App() {
   const [editingInfo, setEditingInfo] = useState(null);
   const [editingNotice, setEditingNotice] = useState(null);
   const [editingTicket, setEditingTicket] = useState(null);
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editingPrep, setEditingPrep] = useState(null);
   const [selectedNotice, setSelectedNotice] = useState(null);
   const [selectedInfo, setSelectedInfo] = useState(null);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
@@ -136,12 +138,16 @@ function App() {
     totalExpense,
     getParticipantCount,
     createExpense,
+    updateExpense,
+    deleteExpense: deleteExpenseItem,
   } = useExpenses(selectedTripId);
   const {
     preparations,
     loading: prepsLoading,
     togglePreparation,
     createPreparation,
+    updatePreparation,
+    deletePreparation: deletePreparationItem,
   } = usePreparations(selectedTripId);
   const {
     sharedInfo,
@@ -1504,8 +1510,43 @@ function App() {
                       return (
                         <div
                           key={ex.id}
-                          className="bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-50 shadow-sm active:scale-[0.98] transition-all"
+                          className="bg-white p-5 rounded-3xl flex justify-between items-center border border-slate-50 shadow-sm active:scale-[0.98] transition-all relative group"
                         >
+                          <div
+                            className="absolute top-2 right-2 flex gap-1 z-20"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingExpense(ex);
+                                setShowAddExpenseModal(true);
+                              }}
+                              className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                              title="수정"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm("지출 내역을 삭제하시겠습니까?")) {
+                                  const result = await deleteExpenseItem(ex.id);
+                                  if (result.error) {
+                                    alert("삭제 실패: " + result.error.message);
+                                  } else {
+                                    addNotification(
+                                      "지출 내역이 삭제되었습니다."
+                                    );
+                                  }
+                                }
+                              }}
+                              className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                              title="삭제"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-xl bg-slate-50 flex items-center justify-center font-bold text-xs leading-none text-slate-400">
                               {ex.category?.[0] || "?"}
@@ -1572,8 +1613,48 @@ function App() {
                             return (
                               <div
                                 key={prep.id}
-                                className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 active:scale-[0.99] transition-all"
+                                className="bg-white p-4 rounded-3xl border border-slate-100 shadow-sm flex items-center gap-3 active:scale-[0.99] transition-all relative group"
                               >
+                                <div
+                                  className="absolute top-2 right-2 flex gap-1 z-20"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingPrep(prep);
+                                      setShowAddPrepModal(true);
+                                    }}
+                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                    title="수정"
+                                  >
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (
+                                        confirm("준비물을 삭제하시겠습니까?")
+                                      ) {
+                                        const result =
+                                          await deletePreparationItem(prep.id);
+                                        if (result.error) {
+                                          alert(
+                                            "삭제 실패: " + result.error.message
+                                          );
+                                        } else {
+                                          addNotification(
+                                            "준비물이 삭제되었습니다."
+                                          );
+                                        }
+                                      }
+                                    }}
+                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                    title="삭제"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                                 <button
                                   onClick={() =>
                                     togglePreparation(prep.id, !prep.checked)
@@ -1895,13 +1976,17 @@ function App() {
       {/* PREP MODAL */}
       {showAddPrepModal && (
         <CreateLinkModal
-          title="준비물 추가 🎒"
+          title={editingPrep ? "준비물 수정 🎒" : "준비물 추가 🎒"}
           placeholder="준비물 이름 (예: 상비약)"
-          onClose={() => setShowAddPrepModal(false)}
+          onClose={() => {
+            setShowAddPrepModal(false);
+            setEditingPrep(null);
+          }}
           isPrep
           travelId={selectedTripId}
           itinerary={itinerary}
           defaultLinkedItineraryId={selectedItineraryItem?.id || null}
+          initialData={editingPrep || null}
           onCreate={async (data) => {
             const result = await createPreparation(data);
             if (result.error) {
@@ -1918,6 +2003,16 @@ function App() {
                 }
               }
             }
+          }}
+          onUpdate={async (id, data) => {
+            const result = await updatePreparation(id, data);
+            if (result.error) {
+              alert("준비물 수정 실패: " + result.error.message);
+            } else {
+              addNotification("준비물이 수정되었습니다.");
+              setEditingPrep(null);
+            }
+            return result;
           }}
         />
       )}
@@ -2001,12 +2096,23 @@ function App() {
       {/* BUDGET MODAL */}
       {showAddExpenseModal && (
         <CreateLinkModal
-          title="지출 내역 추가 💸"
+          title={editingExpense ? "지출 내역 수정 💸" : "지출 내역 추가 💸"}
           placeholder="내용 (예: 편의점 간식)"
-          onClose={() => setShowAddExpenseModal(false)}
+          onClose={() => {
+            setShowAddExpenseModal(false);
+            setEditingExpense(null);
+          }}
           isExpense
           travelId={selectedTripId}
           itinerary={itinerary}
+          initialData={
+            editingExpense
+              ? {
+                  ...editingExpense,
+                  amount: editingExpense.amount?.toString() || "",
+                }
+              : null
+          }
           onCreate={async (data) => {
             const result = await createExpense(data);
             if (result.error) {
@@ -2014,6 +2120,32 @@ function App() {
             } else {
               addNotification("지출이 등록되었습니다.");
             }
+          }}
+          onUpdate={async (id, data) => {
+            // editingExpense에서 payer 정보를 찾아서 payerId 설정
+            // payer는 이름이나 이메일이므로 참여자에서 찾아야 함
+            let payerId = user?.id; // 기본값은 현재 사용자
+            if (editingExpense?.payer) {
+              const payerParticipant = selectedTripData?.participants?.find(
+                (p) => {
+                  const pName = p.name || p.email?.split("@")[0];
+                  return pName === editingExpense.payer;
+                }
+              );
+              payerId = payerParticipant?.id || user?.id;
+            }
+
+            const result = await updateExpense(id, {
+              ...data,
+              payerId,
+            });
+            if (result.error) {
+              alert("지출 수정 실패: " + result.error.message);
+            } else {
+              addNotification("지출이 수정되었습니다.");
+              setEditingExpense(null);
+            }
+            return result;
           }}
         />
       )}

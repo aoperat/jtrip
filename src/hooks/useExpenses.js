@@ -119,6 +119,30 @@ export function useExpenses(travelId) {
     }
   };
 
+  const updateExpense = async (id, expenseData) => {
+    try {
+      const { data, error: updateError } = await supabase
+        .from('expenses')
+        .update({
+          title: expenseData.title,
+          amount: expenseData.amount,
+          payer_id: expenseData.payerId || null,
+          category: expenseData.category || 'Other',
+          linked_itinerary_id: expenseData.linkedItineraryId || null,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      await fetchExpenses();
+      return { data, error: null };
+    } catch (err) {
+      console.error('지출 수정 실패:', err);
+      return { data: null, error: err };
+    }
+  };
+
   const deleteExpense = async (id) => {
     try {
       const { error: deleteError } = await supabase
@@ -153,6 +177,7 @@ export function useExpenses(travelId) {
     error,
     totalExpense,
     createExpense,
+    updateExpense,
     deleteExpense,
     getParticipantCount,
     refetch: fetchExpenses,

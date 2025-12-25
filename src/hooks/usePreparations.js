@@ -114,6 +114,28 @@ export function usePreparations(travelId) {
     }
   };
 
+  const updatePreparation = async (id, prepData) => {
+    try {
+      const { data, error: updateError } = await supabase
+        .from('preparations')
+        .update({
+          content: prepData.content,
+          type: prepData.type,
+          linked_itinerary_id: prepData.linkedItineraryId || null,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      await fetchPreparations();
+      return { data, error: null };
+    } catch (err) {
+      console.error('준비물 수정 실패:', err);
+      return { data: null, error: err };
+    }
+  };
+
   const deletePreparation = async (id) => {
     try {
       const { error: deleteError } = await supabase
@@ -135,6 +157,7 @@ export function usePreparations(travelId) {
     loading,
     error,
     createPreparation,
+    updatePreparation,
     togglePreparation,
     deletePreparation,
     refetch: fetchPreparations,
