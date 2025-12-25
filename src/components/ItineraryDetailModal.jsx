@@ -26,6 +26,10 @@ export default function ItineraryDetailModal({
   onNavigate,
   onViewTicket,
   isChecked,
+  onCreateTicket,
+  onCreatePrep,
+  onCreateExpense,
+  onCreateInfo,
 }) {
   if (!item) return null;
 
@@ -181,7 +185,12 @@ export default function ItineraryDetailModal({
                 <ChevronRight className="w-5 h-5 text-orange-200" />
               </div>
             ) : (
-              <EmptyLink icon={Ticket} label="티켓 연결하기" color="orange" />
+              <EmptyLink
+                icon={Ticket}
+                label="티켓 연결하기"
+                color="orange"
+                onClick={onCreateTicket}
+              />
             )}
 
             {/* Prep Card */}
@@ -208,6 +217,7 @@ export default function ItineraryDetailModal({
                 icon={CheckSquare}
                 label="준비물 연결하기"
                 color="blue"
+                onClick={onCreatePrep}
               />
             )}
 
@@ -235,6 +245,7 @@ export default function ItineraryDetailModal({
                 icon={DollarSign}
                 label="지출 내역 기록"
                 color="green"
+                onClick={onCreateExpense}
               />
             )}
 
@@ -258,7 +269,12 @@ export default function ItineraryDetailModal({
                 <ChevronRight className="w-5 h-5 text-slate-300" />
               </div>
             ) : (
-              <EmptyLink icon={Info} label="여행 팁 추가하기" color="slate" />
+              <EmptyLink
+                icon={Info}
+                label="여행 팁 추가하기"
+                color="slate"
+                onClick={onCreateInfo}
+              />
             )}
           </div>
         </section>
@@ -313,7 +329,7 @@ export default function ItineraryDetailModal({
 }
 
 // EmptyLink 컴포넌트
-const EmptyLink = ({ icon: Icon, label, color }) => {
+const EmptyLink = ({ icon: Icon, label, color, onClick }) => {
   const colors = {
     orange: "text-orange-200 border-orange-100 bg-orange-50/20",
     blue: "text-blue-200 border-blue-100 bg-blue-50/20",
@@ -322,7 +338,12 @@ const EmptyLink = ({ icon: Icon, label, color }) => {
   };
   return (
     <div
-      className={`p-4 rounded-[28px] border-2 border-dashed flex items-center justify-center gap-3 opacity-60 ${colors[color]}`}
+      onClick={onClick}
+      className={`p-4 rounded-[28px] border-2 border-dashed flex items-center justify-center gap-3 transition-all ${
+        onClick
+          ? "cursor-pointer hover:opacity-100 hover:scale-105 active:scale-95 opacity-60"
+          : "opacity-60"
+      } ${colors[color]}`}
     >
       <Icon className="w-4 h-4" />
       <span className="text-[10px] font-black uppercase tracking-widest">

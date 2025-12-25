@@ -178,6 +178,97 @@ export function useSharedInfo(travelId) {
     }
   };
 
+  const updateSharedInfo = async (id, updates) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('로그인이 필요합니다.');
+
+      const { data, error: updateError } = await supabase
+        .from('shared_info')
+        .update({
+          title: updates.title,
+          content: updates.content,
+          category: updates.category || 'Tip',
+          linked_itinerary_id: updates.linkedItineraryId || null,
+        })
+        .eq('id', id)
+        .eq('travel_id', travelId)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      await fetchSharedInfo();
+      return { data, error: null };
+    } catch (err) {
+      console.error('공유 정보 수정 실패:', err);
+      return { data: null, error: err };
+    }
+  };
+
+  const deleteSharedInfo = async (id) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('로그인이 필요합니다.');
+
+      const { error: deleteError } = await supabase
+        .from('shared_info')
+        .delete()
+        .eq('id', id)
+        .eq('travel_id', travelId);
+
+      if (deleteError) throw deleteError;
+      await fetchSharedInfo();
+      return { error: null };
+    } catch (err) {
+      console.error('공유 정보 삭제 실패:', err);
+      return { error: err };
+    }
+  };
+
+  const updateNotice = async (id, content) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('로그인이 필요합니다.');
+
+      const { data, error: updateError } = await supabase
+        .from('notices')
+        .update({
+          content: content,
+        })
+        .eq('id', id)
+        .eq('travel_id', travelId)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      await fetchNotices();
+      return { data, error: null };
+    } catch (err) {
+      console.error('공지사항 수정 실패:', err);
+      return { data: null, error: err };
+    }
+  };
+
+  const deleteNotice = async (id) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('로그인이 필요합니다.');
+
+      const { error: deleteError } = await supabase
+        .from('notices')
+        .delete()
+        .eq('id', id)
+        .eq('travel_id', travelId);
+
+      if (deleteError) throw deleteError;
+      await fetchNotices();
+      return { error: null };
+    } catch (err) {
+      console.error('공지사항 삭제 실패:', err);
+      return { error: err };
+    }
+  };
+
   return {
     sharedInfo,
     notices,
@@ -185,6 +276,10 @@ export function useSharedInfo(travelId) {
     error,
     createSharedInfo,
     createNotice,
+    updateSharedInfo,
+    deleteSharedInfo,
+    updateNotice,
+    deleteNotice,
     refetch: () => {
       fetchSharedInfo();
       fetchNotices();

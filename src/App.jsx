@@ -30,14 +30,18 @@ import {
   Navigation,
   Search,
   Loader2,
+  Edit2,
+  Trash2,
 } from "lucide-react";
 import NavButton from "./components/NavButton";
 import LinkedBadge from "./components/LinkedBadge";
 import LinkBadge from "./components/LinkBadge";
 import CreateLinkModal from "./components/CreateLinkModal";
+import CreateNoticeModal from "./components/CreateNoticeModal";
 import AddItineraryModal from "./components/AddItineraryModal";
 import EditItineraryModal from "./components/EditItineraryModal";
 import ItineraryDetailModal from "./components/ItineraryDetailModal";
+import InfoDetailModal from "./components/InfoDetailModal";
 import MapView from "./components/MapView";
 import SettingsView from "./components/SettingsView";
 import { useTravels } from "./hooks/useTravels";
@@ -81,6 +85,11 @@ function App() {
   const [showAddTicketModal, setShowAddTicketModal] = useState(false);
   const [showAddPrepModal, setShowAddPrepModal] = useState(false);
   const [showAddInfoModal, setShowAddInfoModal] = useState(false);
+  const [showAddNoticeModal, setShowAddNoticeModal] = useState(false);
+  const [editingInfo, setEditingInfo] = useState(null);
+  const [editingNotice, setEditingNotice] = useState(null);
+  const [selectedNotice, setSelectedNotice] = useState(null);
+  const [selectedInfo, setSelectedInfo] = useState(null);
   const [showAddExpenseModal, setShowAddExpenseModal] = useState(false);
   const [showAddItineraryModal, setShowAddItineraryModal] = useState(false);
   const [showEditItineraryModal, setShowEditItineraryModal] = useState(false);
@@ -102,6 +111,7 @@ function App() {
     ticketTypes,
     loading: ticketsLoading,
     createTicketType,
+    deleteTicketType,
   } = useTickets(selectedTripId);
   const {
     expenses,
@@ -122,6 +132,10 @@ function App() {
     loading: infoLoading,
     createSharedInfo,
     createNotice,
+    updateSharedInfo,
+    deleteSharedInfo,
+    updateNotice,
+    deleteNotice,
   } = useSharedInfo(selectedTripId);
 
   // 선택된 여행 정보 (trips에서 찾기)
@@ -560,12 +574,55 @@ function App() {
                                       onClick={() =>
                                         setSelectedItineraryItem(item)
                                       }
-                                      className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 ${
+                                      className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
                                         isChecked
                                           ? "opacity-40 bg-slate-50 border-slate-100"
                                           : "bg-white shadow-sm border-slate-100"
                                       }`}
                                     >
+                                      <div
+                                        className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedItineraryItem(item);
+                                            setShowEditItineraryModal(true);
+                                          }}
+                                          className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                                        >
+                                          <Edit2 className="w-3.5 h-3.5" />
+                                        </button>
+                                        <button
+                                          onClick={async (e) => {
+                                            e.stopPropagation();
+                                            if (
+                                              confirm(
+                                                "일정을 삭제하시겠습니까?"
+                                              )
+                                            ) {
+                                              const result =
+                                                await deleteItineraryItem(
+                                                  item.id
+                                                );
+                                              if (result.error) {
+                                                alert(
+                                                  "삭제 실패: " +
+                                                    result.error.message
+                                                );
+                                              } else {
+                                                addNotification(
+                                                  "일정이 삭제되었습니다."
+                                                );
+                                              }
+                                            }
+                                          }}
+                                          className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                                        >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
                                       <div className="flex-1 overflow-hidden">
                                         <div className="flex justify-between items-start mb-1">
                                           <span
@@ -682,12 +739,49 @@ function App() {
                             </button>
                             <div
                               onClick={() => setSelectedItineraryItem(item)}
-                              className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 ${
+                              className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group ${
                                 isChecked
                                   ? "opacity-40 bg-slate-50 border-slate-100"
                                   : "bg-white shadow-sm border-slate-100"
                               }`}
                             >
+                              <div
+                                className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedItineraryItem(item);
+                                    setShowEditItineraryModal(true);
+                                  }}
+                                  className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={async (e) => {
+                                    e.stopPropagation();
+                                    if (confirm("일정을 삭제하시겠습니까?")) {
+                                      const result = await deleteItineraryItem(
+                                        item.id
+                                      );
+                                      if (result.error) {
+                                        alert(
+                                          "삭제 실패: " + result.error.message
+                                        );
+                                      } else {
+                                        addNotification(
+                                          "일정이 삭제되었습니다."
+                                        );
+                                      }
+                                    }
+                                  }}
+                                  className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                               <div className="flex-1 overflow-hidden">
                                 <div className="flex justify-between items-start mb-1">
                                   <span
@@ -825,8 +919,31 @@ function App() {
                         <div
                           key={type.id}
                           onClick={() => setSelectedTicketType(type)}
-                          className="bg-white rounded-[28px] p-5 border border-slate-100 shadow-sm flex items-center gap-4 active:scale-95 transition-all cursor-pointer"
+                          className="bg-white rounded-[28px] p-5 border border-slate-100 shadow-sm flex items-center gap-4 active:scale-95 transition-all cursor-pointer relative group"
                         >
+                          <div
+                            className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm("퀵패스를 삭제하시겠습니까?")) {
+                                  const result = await deleteTicketType(
+                                    type.id
+                                  );
+                                  if (result.error) {
+                                    alert("삭제 실패: " + result.error.message);
+                                  } else {
+                                    addNotification("퀵패스가 삭제되었습니다.");
+                                  }
+                                }
+                              }}
+                              className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                           <div
                             className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
                               isDone
@@ -1039,20 +1156,9 @@ function App() {
                       <Megaphone className="w-5 h-5 text-orange-500" /> 공지사항
                     </h2>
                     <button
-                      onClick={async () => {
-                        const content = prompt("공지사항 내용을 입력하세요:");
-                        if (content && content.trim()) {
-                          const result = await createNotice({
-                            content: content.trim(),
-                          });
-                          if (result.error) {
-                            alert(
-                              "공지사항 생성 실패: " + result.error.message
-                            );
-                          } else {
-                            addNotification("공지사항이 등록되었습니다.");
-                          }
-                        }
+                      onClick={() => {
+                        setEditingNotice(null);
+                        setShowAddNoticeModal(true);
                       }}
                       className="p-2 bg-slate-100 text-slate-400 rounded-xl active:scale-90"
                     >
@@ -1075,10 +1181,44 @@ function App() {
                       selectedTripData?.notices?.map((notice) => (
                         <div
                           key={notice.id}
-                          className="bg-orange-50 p-5 rounded-[32px] border border-orange-100 relative overflow-hidden"
+                          onClick={() => setSelectedNotice(notice)}
+                          className="bg-orange-50 p-5 rounded-[32px] border border-orange-100 relative overflow-hidden group cursor-pointer active:scale-[0.98] transition-all"
                         >
                           <div className="absolute top-0 right-0 p-3 opacity-10">
                             <Megaphone className="w-10 h-10" />
+                          </div>
+                          <div
+                            className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingNotice(notice);
+                                setShowAddNoticeModal(true);
+                              }}
+                              className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm("공지사항을 삭제하시겠습니까?")) {
+                                  const result = await deleteNotice(notice.id);
+                                  if (result.error) {
+                                    alert("삭제 실패: " + result.error.message);
+                                  } else {
+                                    addNotification(
+                                      "공지사항이 삭제되었습니다."
+                                    );
+                                  }
+                                }
+                              }}
+                              className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                           <p className="text-sm text-slate-800 font-medium leading-relaxed mb-2 relative z-10">
                             {notice.content}
@@ -1117,8 +1257,44 @@ function App() {
                         return (
                           <div
                             key={info.id}
-                            className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm relative group active:scale-[0.98] transition-all"
+                            onClick={() => setSelectedInfo(info)}
+                            className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm relative group cursor-pointer active:scale-[0.98] transition-all"
                           >
+                            <div
+                              className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingInfo(info);
+                                  setShowAddInfoModal(true);
+                                }}
+                                className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (confirm("정보를 삭제하시겠습니까?")) {
+                                    const result = await deleteSharedInfo(
+                                      info.id
+                                    );
+                                    if (result.error) {
+                                      alert(
+                                        "삭제 실패: " + result.error.message
+                                      );
+                                    } else {
+                                      addNotification("정보가 삭제되었습니다.");
+                                    }
+                                  }
+                                }}
+                                className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                             <div className="flex justify-between items-start mb-2">
                               <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-blue-50 text-blue-500 leading-none">
                                 {info.category}
@@ -1213,12 +1389,23 @@ function App() {
           onClose={() => setShowAddTicketModal(false)}
           travelId={selectedTripId}
           itinerary={itinerary}
+          defaultLinkedItineraryId={selectedItineraryItem?.id || null}
           onCreate={async (data) => {
             const result = await createTicketType(data);
             if (result.error) {
               alert("티켓 생성 실패: " + result.error.message);
             } else {
               addNotification("티켓이 등록되었습니다.");
+              // 상세 모달이 열려있으면 데이터 새로고침
+              if (selectedItineraryItem) {
+                // 일정 데이터 다시 로드 (useItinerary 훅이 자동으로 업데이트)
+                const updatedItem = Object.values(itinerary || {})
+                  .flat()
+                  .find((item) => item.id === selectedItineraryItem.id);
+                if (updatedItem) {
+                  setSelectedItineraryItem(updatedItem);
+                }
+              }
             }
           }}
         />
@@ -1233,12 +1420,22 @@ function App() {
           isPrep
           travelId={selectedTripId}
           itinerary={itinerary}
+          defaultLinkedItineraryId={selectedItineraryItem?.id || null}
           onCreate={async (data) => {
             const result = await createPreparation(data);
             if (result.error) {
               alert("준비물 생성 실패: " + result.error.message);
             } else {
               addNotification("준비물이 추가되었습니다.");
+              // 상세 모달이 열려있으면 데이터 새로고침
+              if (selectedItineraryItem) {
+                const updatedItem = Object.values(itinerary || {})
+                  .flat()
+                  .find((item) => item.id === selectedItineraryItem.id);
+                if (updatedItem) {
+                  setSelectedItineraryItem(updatedItem);
+                }
+              }
             }
           }}
         />
@@ -1247,18 +1444,74 @@ function App() {
       {/* INFO MODAL */}
       {showAddInfoModal && (
         <CreateLinkModal
-          title="여행 정보 등록 💡"
+          title={editingInfo ? "여행 정보 수정 💡" : "여행 정보 등록 💡"}
           placeholder="정보 제목 (예: 팀랩 입장 팁)"
-          onClose={() => setShowAddInfoModal(false)}
+          onClose={() => {
+            setShowAddInfoModal(false);
+            setEditingInfo(null);
+          }}
           isInfo
           travelId={selectedTripId}
           itinerary={itinerary}
+          initialData={editingInfo}
+          defaultLinkedItineraryId={
+            editingInfo ? null : selectedItineraryItem?.id || null
+          }
           onCreate={async (data) => {
             const result = await createSharedInfo(data);
             if (result.error) {
               alert("정보 생성 실패: " + result.error.message);
             } else {
               addNotification("정보가 등록되었습니다.");
+              setShowAddInfoModal(false);
+              // 상세 모달이 열려있으면 데이터 새로고침
+              if (selectedItineraryItem) {
+                const updatedItem = Object.values(itinerary || {})
+                  .flat()
+                  .find((item) => item.id === selectedItineraryItem.id);
+                if (updatedItem) {
+                  setSelectedItineraryItem(updatedItem);
+                }
+              }
+            }
+          }}
+          onUpdate={async (id, data) => {
+            const result = await updateSharedInfo(id, data);
+            if (result.error) {
+              alert("정보 수정 실패: " + result.error.message);
+            } else {
+              addNotification("정보가 수정되었습니다.");
+              setShowAddInfoModal(false);
+              setEditingInfo(null);
+            }
+          }}
+        />
+      )}
+
+      {showAddNoticeModal && (
+        <CreateNoticeModal
+          onClose={() => {
+            setShowAddNoticeModal(false);
+            setEditingNotice(null);
+          }}
+          initialData={editingNotice}
+          onCreate={async (data) => {
+            const result = await createNotice(data);
+            if (result.error) {
+              alert("공지사항 생성 실패: " + result.error.message);
+            } else {
+              addNotification("공지사항이 등록되었습니다.");
+              setShowAddNoticeModal(false);
+            }
+          }}
+          onUpdate={async (id, content) => {
+            const result = await updateNotice(id, content);
+            if (result.error) {
+              alert("공지사항 수정 실패: " + result.error.message);
+            } else {
+              addNotification("공지사항이 수정되었습니다.");
+              setShowAddNoticeModal(false);
+              setEditingNotice(null);
             }
           }}
         />
@@ -1424,6 +1677,36 @@ function App() {
               </div>
             )}
           </main>
+          {/* Bottom Actions */}
+          <div className="absolute bottom-10 left-6 right-6 z-20">
+            <div className="flex gap-3 mb-3">
+              <button
+                onClick={async () => {
+                  if (confirm("퀵패스를 삭제하시겠습니까?")) {
+                    const result = await deleteTicketType(
+                      selectedTicketType.id
+                    );
+                    if (result.error) {
+                      alert("삭제 실패: " + result.error.message);
+                    } else {
+                      addNotification("퀵패스가 삭제되었습니다.");
+                      setSelectedTicketType(null);
+                    }
+                  }
+                }}
+                className="flex-1 py-4 bg-red-50 text-red-600 rounded-[32px] font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 transition-all"
+              >
+                <Trash2 className="w-4 h-4" />
+                삭제
+              </button>
+            </div>
+            <button
+              onClick={() => setSelectedTicketType(null)}
+              className="w-full py-5 bg-slate-900 rounded-[32px] font-black text-white text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all"
+            >
+              닫기
+            </button>
+          </div>
         </div>
       )}
 
@@ -1526,6 +1809,72 @@ function App() {
           onViewTicket={(ticketType) => {
             setSelectedTicketType(ticketType);
             setSelectedItineraryItem(null);
+          }}
+          onCreateTicket={() => {
+            setShowAddTicketModal(true);
+          }}
+          onCreatePrep={() => {
+            setShowAddPrepModal(true);
+          }}
+          onCreateExpense={() => {
+            setShowAddExpenseModal(true);
+          }}
+          onCreateInfo={() => {
+            setShowAddInfoModal(true);
+          }}
+        />
+      )}
+
+      {/* -------------------- MODAL: INFO DETAIL (NOTICE/INFO) -------------------- */}
+      {selectedNotice && (
+        <InfoDetailModal
+          item={selectedNotice}
+          type="notice"
+          onClose={() => setSelectedNotice(null)}
+          onEdit={() => {
+            setEditingNotice(selectedNotice);
+            setShowAddNoticeModal(true);
+          }}
+          onDelete={async () => {
+            const result = await deleteNotice(selectedNotice.id);
+            if (!result.error) {
+              addNotification("공지사항이 삭제되었습니다.");
+            }
+            return result;
+          }}
+        />
+      )}
+
+      {selectedInfo && selectedTripData && (
+        <InfoDetailModal
+          item={selectedInfo}
+          type="info"
+          linkedItinerary={
+            selectedInfo.linkedItineraryId && selectedTripData.itinerary
+              ? (() => {
+                  const linkedItem = Object.values(selectedTripData.itinerary)
+                    .flat()
+                    .find((item) => item.id === selectedInfo.linkedItineraryId);
+                  return linkedItem
+                    ? {
+                        title: linkedItem.title,
+                        time: linkedItem.time || null,
+                      }
+                    : null;
+                })()
+              : null
+          }
+          onClose={() => setSelectedInfo(null)}
+          onEdit={() => {
+            setEditingInfo(selectedInfo);
+            setShowAddInfoModal(true);
+          }}
+          onDelete={async () => {
+            const result = await deleteSharedInfo(selectedInfo.id);
+            if (!result.error) {
+              addNotification("정보가 삭제되었습니다.");
+            }
+            return result;
           }}
         />
       )}

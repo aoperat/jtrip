@@ -10,12 +10,67 @@ export default function MapView({ itineraryItems, selectedDay }) {
   const mapInstanceRef = useRef(null);
   const markersRef = useRef([]);
   const polylineRef = useRef(null);
+  const animationIntervalRef = useRef(null);
   const [zoomLevel, setZoomLevel] = useState(10);
   const [isZooming, setIsZooming] = useState(false);
   const { error, isLoading, isReady } = useGoogleMaps();
-  
+
   const MIN_ZOOM = 3;
   const MAX_ZOOM = 20;
+
+  // 파스텔 톤 지도 스타일 (경로가 잘 보이도록)
+  const mapStyles = [
+    {
+      featureType: 'poi',
+      elementType: 'labels',
+      stylers: [{ visibility: 'off' }],
+    },
+    {
+      featureType: 'poi',
+      elementType: 'geometry',
+      stylers: [{ visibility: 'off' }],
+    },
+    {
+      featureType: 'water',
+      elementType: 'geometry',
+      stylers: [{ color: '#c9e4f6' }],
+    },
+    {
+      featureType: 'water',
+      elementType: 'labels.text.fill',
+      stylers: [{ color: '#9ecae1' }],
+    },
+    {
+      featureType: 'landscape',
+      elementType: 'geometry',
+      stylers: [{ color: '#f5f5f5' }],
+    },
+    {
+      featureType: 'landscape.natural',
+      elementType: 'geometry',
+      stylers: [{ color: '#e8f4e8' }],
+    },
+    {
+      featureType: 'road',
+      elementType: 'geometry',
+      stylers: [{ color: '#ffffff' }],
+    },
+    {
+      featureType: 'road',
+      elementType: 'geometry.stroke',
+      stylers: [{ color: '#e0e0e0' }],
+    },
+    {
+      featureType: 'road.highway',
+      elementType: 'geometry',
+      stylers: [{ color: '#ffeaa7' }],
+    },
+    {
+      featureType: 'transit',
+      elementType: 'labels',
+      stylers: [{ visibility: 'off' }],
+    },
+  ];
 
   // 위치 정보가 있는 항목만 필터링 (메모이제이션)
   const itemsWithLocation = useMemo(() => {
@@ -63,13 +118,7 @@ export default function MapView({ itineraryItems, selectedDay }) {
       },
       minZoom: MIN_ZOOM,
       maxZoom: MAX_ZOOM,
-      styles: [
-        {
-          featureType: 'poi',
-          elementType: 'labels',
-          stylers: [{ visibility: 'off' }],
-        },
-      ],
+      styles: mapStyles,
     });
 
     // 초기 줌 레벨 설정
@@ -159,15 +208,17 @@ export default function MapView({ itineraryItems, selectedDay }) {
       return;
     }
 
+    // 기존 애니메이션 정리
+    if (animationIntervalRef.current) {
+      clearInterval(animationIntervalRef.current);
+      animationIntervalRef.current = null;
+    }
+
     // 위치 정보가 없는 경우 기존 마커만 제거
     if (itemsWithLocation.length === 0) {
       markersRef.current.forEach((m) => {
-        if (m.marker) {
-          m.marker.setMap(null);
-        }
-        if (m.infoWindow) {
-          m.infoWindow.close();
-        }
+        if (m.marker) m.marker.setMap(null);
+        if (m.infoWindow) m.infoWindow.close();
       });
       markersRef.current = [];
       if (polylineRef.current) {
@@ -179,12 +230,8 @@ export default function MapView({ itineraryItems, selectedDay }) {
 
     // 기존 마커 및 경로 제거
     markersRef.current.forEach((m) => {
-      if (m.marker) {
-        m.marker.setMap(null);
-      }
-      if (m.infoWindow) {
-        m.infoWindow.close();
-      }
+      if (m.marker) m.marker.setMap(null);
+      if (m.infoWindow) m.infoWindow.close();
     });
     markersRef.current = [];
 
@@ -201,6 +248,23 @@ export default function MapView({ itineraryItems, selectedDay }) {
       if (a.time && !b.time) return -1;
       if (!a.time && b.time) return 1;
       return 0;
+    });
+
+    // 중복 좌표 감지 (locationCounts)
+    const locationCounts = {};
+    sortedItems.forEach((item, index) => {
+      // 좌표를 소수점 5자리까지 비교 (약 1m 오차 허용)
+      const key = `${item.latitude.toFixed(5)},${item.longitude.toFixed(5)}`;
+      if (!locationCounts[key]) {
+        locationCounts[key] = {
+          indices: [],
+          items: [],
+          lat: item.latitude,
+          lng: item.longitude,
+        };
+      }
+      locationCounts[key].indices.push(index + 1);
+      locationCounts[key].items.push(item);
     });
 
     // 경로 좌표 배열 생성
@@ -222,52 +286,102 @@ export default function MapView({ itineraryItems, selectedDay }) {
             icon: {
               path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
               scale: 4,
-              strokeColor: '#2563eb',
-              strokeWeight: 2,
+              fillColor: '#2563eb',
+              fillOpacity: 1,
+              strokeColor: '#1d4ed8',
+              strokeWeight: 1,
             },
-            offset: '50%',
-            repeat: '100px',
+            offset: '0%',
+            repeat: '80px',
           },
         ],
       });
       polylineRef.current.setMap(mapInstanceRef.current);
+
+      // 화살표 흐르는 애니메이션
+      let animationOffset = 0;
+      animationIntervalRef.current = setInterval(() => {
+        animationOffset = (animationOffset + 1) % 80;
+        if (polylineRef.current) {
+          polylineRef.current.set('icons', [
+            {
+              icon: {
+                path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
+                scale: 4,
+                fillColor: '#2563eb',
+                fillOpacity: 1,
+                strokeColor: '#1d4ed8',
+                strokeWeight: 1,
+              },
+              offset: `${animationOffset}px`,
+              repeat: '80px',
+            },
+          ]);
+        }
+      }, 50);
     }
 
-    // 마커 추가
-    sortedItems.forEach((item, index) => {
+    // 중복 위치에 대해 하나의 마커만 생성 (첫 번째 방문 번호만 표시)
+    const processedLocations = new Set();
+
+    Object.entries(locationCounts).forEach(([key, data]) => {
+      if (processedLocations.has(key)) return;
+      processedLocations.add(key);
+
+      const { indices, items, lat, lng } = data;
+      const visitCount = indices.length;
+      const isHub = visitCount > 1; // 여러 번 방문하는 거점
+
+      // 첫 번째 방문 번호만 표시
+      const labelText = `${indices[0]}`;
+
+      // 거점 마커는 크기와 색상 강조
+      const markerScale = isHub ? 12 : 10;
+      const markerColor = isHub ? '#dc2626' : '#2563eb'; // 거점은 빨간색
+
       const marker = new window.google.maps.Marker({
-        position: {
-          lat: item.latitude,
-          lng: item.longitude,
-        },
+        position: { lat, lng },
         map: mapInstanceRef.current,
-        title: item.title,
+        title: items.map(i => i.title).join(' → '),
         label: {
-          text: `${index + 1}`,
+          text: labelText,
           color: 'white',
-          fontSize: '12px',
+          fontSize: '11px',
           fontWeight: 'bold',
         },
         icon: {
           path: window.google.maps.SymbolPath.CIRCLE,
-          scale: 8,
-          fillColor: '#2563eb',
+          scale: markerScale,
+          fillColor: markerColor,
           fillOpacity: 1,
           strokeColor: '#ffffff',
           strokeWeight: 2,
         },
+        zIndex: isHub ? 1000 : 100,
       });
 
-      // 정보창 생성
-      const infoWindow = new window.google.maps.InfoWindow({
-        content: `
-          <div style="padding: 8px; min-width: 200px;">
-            <h3 style="margin: 0 0 4px 0; font-weight: bold; font-size: 14px; color: #1e293b;">
+      // 정보창 생성 (여러 일정이 있으면 모두 표시)
+      const contentParts = items.map((item, idx) => `
+        <div style="padding: 8px; ${idx > 0 ? 'border-top: 1px solid #e2e8f0;' : ''}">
+          <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+            <span style="background: ${isHub ? '#dc2626' : '#2563eb'}; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px;">
+              ${indices[idx]}
+            </span>
+            <h3 style="margin: 0; font-weight: bold; font-size: 14px; color: #1e293b;">
               ${item.title}
             </h3>
-            ${item.time ? `<p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b;">⏰ ${item.time}</p>` : ''}
-            ${item.locationName ? `<p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b;">📍 ${item.locationName}</p>` : ''}
-            ${item.address ? `<p style="margin: 0; font-size: 10px; color: #94a3b8;">${item.address}</p>` : ''}
+          </div>
+          ${item.time ? `<p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b;">⏰ ${item.time}</p>` : ''}
+          ${item.locationName ? `<p style="margin: 0 0 4px 0; font-size: 11px; color: #64748b;">📍 ${item.locationName}</p>` : ''}
+          ${item.address ? `<p style="margin: 0; font-size: 10px; color: #94a3b8;">${item.address}</p>` : ''}
+        </div>
+      `).join('');
+
+      const infoWindow = new window.google.maps.InfoWindow({
+        content: `
+          <div style="min-width: 220px; max-height: 300px; overflow-y: auto;">
+            ${isHub ? `<div style="background: #dc2626; color: white; padding: 6px 12px; font-size: 11px; font-weight: bold; text-align: center;">📍 ${visitCount}회 방문</div>` : ''}
+            ${contentParts}
           </div>
         `,
       });
@@ -346,10 +460,15 @@ export default function MapView({ itineraryItems, selectedDay }) {
         updateZoom();
         cleanup();
       }, 500);
-      
-      // cleanup 함수
-      return cleanup;
     }
+
+    // cleanup 함수 (애니메이션 정리 포함)
+    return () => {
+      if (animationIntervalRef.current) {
+        clearInterval(animationIntervalRef.current);
+        animationIntervalRef.current = null;
+      }
+    };
   }, [isReady, itemsWithLocation, selectedDay]);
 
   // 로딩 중인 경우

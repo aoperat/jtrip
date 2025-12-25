@@ -185,6 +185,22 @@ export function useTickets(travelId) {
     }
   };
 
+  const deleteTicketType = async (id) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('ticket_types')
+        .delete()
+        .eq('id', id);
+
+      if (deleteError) throw deleteError;
+      await fetchTickets();
+      return { error: null };
+    } catch (err) {
+      console.error('티켓 타입 삭제 실패:', err);
+      return { error: err };
+    }
+  };
+
   return {
     ticketTypes,
     loading,
@@ -192,6 +208,7 @@ export function useTickets(travelId) {
     createTicketType,
     createRegistration,
     deleteRegistration,
+    deleteTicketType,
     refetch: fetchTickets,
   };
 }

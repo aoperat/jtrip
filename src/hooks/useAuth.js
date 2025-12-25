@@ -7,23 +7,66 @@ export function useAuth() {
   const [session, setSession] = useState(null);
 
   useEffect(() => {
-    // 현재 세션 확인
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let mounted = true;
+    let subscription = null;
+    let sessionChecked = false;
+    
+    // 현재 세션 확인 (한 번만)
+    const checkSession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (!mounted) return;
+        
+        if (error) {
+          console.error('세션 확인 오류:', error);
+          setLoading(false);
+          return;
+        }
+        
+        sessionChecked = true;
+        setSession(session);
+        setUser(session?.user ?? null);
+        setLoading(false);
+      } catch (err) {
+        console.error('세션 확인 예외:', err);
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+    
+    checkSession();
 
     // 인증 상태 변경 감지
     const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+      data: { subscription: authSubscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      
+      // 초기 로드 이벤트는 무시 (이미 getSession으로 처리됨)
+      if (event === 'INITIAL_SESSION' && sessionChecked) {
+        return;
+      }
+      
+      // 디버깅용 로그 (개발 환경에서만)
+      if (import.meta.env.DEV) {
+        console.log('인증 상태 변경:', event, session?.user?.email || '로그아웃');
+      }
+      
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
+    
+    subscription = authSubscription;
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, []);
 
   const signIn = async (email, password) => {

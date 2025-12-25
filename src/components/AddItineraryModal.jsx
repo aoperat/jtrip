@@ -104,7 +104,7 @@ export default function AddItineraryModal({
   };
 
   return (
-    <div className="absolute inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
+    <div className="absolute inset-0 z-[210] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
       <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
         <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">

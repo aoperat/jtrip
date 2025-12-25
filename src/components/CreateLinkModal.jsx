@@ -10,15 +10,20 @@ const CreateLinkModal = ({
   isExpense,
   travelId,
   itinerary,
-  onCreate
+  onCreate,
+  onUpdate,
+  initialData,
+  defaultLinkedItineraryId
 }) => {
-  const [name, setName] = useState('');
-  const [amount, setAmount] = useState('');
-  const [prepType, setPrepType] = useState('common');
-  const [category, setCategory] = useState('Tip');
-  const [ticketMode, setTicketMode] = useState('individual'); // 티켓 모드 추가
-  const [linkedItineraryId, setLinkedItineraryId] = useState('');
+  const [name, setName] = useState(initialData?.title || initialData?.name || initialData?.content || '');
+  const [content, setContent] = useState(initialData?.content || '');
+  const [amount, setAmount] = useState(initialData?.amount?.toString() || '');
+  const [prepType, setPrepType] = useState(initialData?.type || 'common');
+  const [category, setCategory] = useState(initialData?.category || 'Tip');
+  const [ticketMode, setTicketMode] = useState(initialData?.mode || 'individual');
+  const [linkedItineraryId, setLinkedItineraryId] = useState(initialData?.linkedItineraryId || defaultLinkedItineraryId || '');
   const [itineraryOptions, setItineraryOptions] = useState([]);
+  const isEditMode = !!initialData;
 
   useEffect(() => {
     // 일정 옵션 생성
@@ -69,7 +74,7 @@ const CreateLinkModal = ({
       } else if (isInfo) {
         data = {
           title: name,
-          content: name, // 간단하게 제목과 내용을 같게
+          content: content || name, // 내용이 없으면 제목 사용
           category: category,
           linkedItineraryId: linkedItineraryId || null,
         };
@@ -82,7 +87,9 @@ const CreateLinkModal = ({
         };
       }
 
-      if (onCreate) {
+      if (isEditMode && onUpdate) {
+        await onUpdate(initialData.id, data);
+      } else if (onCreate) {
         await onCreate(data);
       }
       
@@ -94,7 +101,7 @@ const CreateLinkModal = ({
   };
 
   return (
-    <div className="absolute inset-0 z-[110] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
+    <div className="absolute inset-0 z-[210] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
       <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
         <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">{title}</h2>
@@ -120,6 +127,25 @@ const CreateLinkModal = ({
                   placeholder="금액"
                   required
                   min="0"
+                />
+              </div>
+            ) : isInfo ? (
+              <div className="space-y-3">
+                <input 
+                  autoFocus 
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm" 
+                  placeholder={placeholder}
+                  required
+                />
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+                  placeholder="정보 내용을 입력하세요..."
+                  rows={4}
+                  required
                 />
               </div>
             ) : (
@@ -253,7 +279,7 @@ const CreateLinkModal = ({
             onClick={handleSubmit}
             className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white text-sm shadow-xl shadow-blue-100 active:scale-95 transition-all"
           >
-            저장하기
+            {isEditMode ? '수정하기' : '저장하기'}
           </button>
         </div>
       </div>

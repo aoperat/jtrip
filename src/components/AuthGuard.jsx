@@ -62,6 +62,7 @@ export default function AuthGuard({ children }) {
     }
   };
 
+  // 로딩 중일 때는 로딩 화면 표시
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-50">
@@ -73,6 +74,7 @@ export default function AuthGuard({ children }) {
     );
   }
 
+  // 로딩이 완료되었고 사용자가 없을 때만 로그인 화면 표시
   if (!user) {
     return (
       <div className="flex items-center justify-center h-screen bg-slate-50 px-6">
