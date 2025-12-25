@@ -94,7 +94,7 @@ export function useAuth() {
         .from('profiles')
         .insert({
           id: data.user.id,
-          nickname: nickname,
+          name: nickname,
         });
       
       if (profileError) {

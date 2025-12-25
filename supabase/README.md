@@ -37,14 +37,23 @@
 
 ### 4단계: Storage 버킷 생성 (이미지 업로드용)
 
+다음 버킷들을 생성해야 합니다:
+- `tickets` - 티켓 이미지
+- `profiles` - 프로필 사진
+- `travel-images` - 여행 대표 이미지
+- `itinerary-images` - 일정 이미지
+
+각 버킷별로:
 1. 왼쪽 메뉴의 **Storage** 클릭
 2. **Create a new bucket** 클릭
 3. 설정:
-   - **Name**: `tickets`
+   - **Name**: 버킷 이름 (예: `profiles`, `tickets`, `travel-images`, `itinerary-images`)
    - **Public bucket**: ✅ 체크 (중요!)
    - **File size limit**: 5MB (또는 원하는 크기)
    - **Allowed MIME types**: `image/*` (또는 비워두기)
 4. **Create bucket** 클릭
+
+자세한 내용은 `storage-buckets-setup.md` 파일을 참고하세요.
 
 ### 5단계: Storage 정책 설정 (선택사항)
 

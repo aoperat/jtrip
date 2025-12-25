@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 const BUCKET_NAME = 'tickets';
-const AVATAR_BUCKET_NAME = 'avatars';
+const AVATAR_BUCKET_NAME = 'profiles';
 const TRAVEL_IMAGE_BUCKET_NAME = 'travel-images';
 const ITINERARY_IMAGE_BUCKET_NAME = 'itinerary-images';
 
@@ -72,15 +72,22 @@ export async function uploadAvatar(file, userId) {
     const filePath = `${fileName}`;
 
     // 기존 아바타 삭제 (있으면)
-    const { data: existingFiles } = await supabase.storage
-      .from(AVATAR_BUCKET_NAME)
-      .list(`${userId}/`, {
-        search: 'avatar-',
-      });
+    try {
+      const { data: existingFiles } = await supabase.storage
+        .from(AVATAR_BUCKET_NAME)
+        .list(`${userId}/`);
 
-    if (existingFiles && existingFiles.length > 0) {
-      const filesToDelete = existingFiles.map((f) => `${userId}/${f.name}`);
-      await supabase.storage.from(AVATAR_BUCKET_NAME).remove(filesToDelete);
+      if (existingFiles && existingFiles.length > 0) {
+        // avatar-로 시작하는 파일만 필터링
+        const avatarFiles = existingFiles.filter((f) => f.name.startsWith('avatar-'));
+        if (avatarFiles.length > 0) {
+          const filesToDelete = avatarFiles.map((f) => `${userId}/${f.name}`);
+          await supabase.storage.from(AVATAR_BUCKET_NAME).remove(filesToDelete);
+        }
+      }
+    } catch (listError) {
+      // 목록 가져오기 실패해도 업로드는 계속 진행 (기존 파일이 없는 경우일 수 있음)
+      console.warn('기존 아바타 파일 목록 가져오기 실패:', listError);
     }
 
     // 파일 업로드
@@ -107,6 +114,13 @@ export async function uploadAvatar(file, userId) {
     };
   } catch (error) {
     console.error('아바타 업로드 실패:', error);
+    // 버킷이 없는 경우 명확한 에러 메시지 제공
+    if (error.message?.includes('Bucket not found') || error.message?.includes('not found')) {
+      return {
+        data: null,
+        error: new Error('profiles 버킷이 생성되지 않았습니다. Supabase 대시보드에서 Storage > Create bucket으로 "profiles" 버킷을 생성해주세요.'),
+      };
+    }
     return {
       data: null,
       error,

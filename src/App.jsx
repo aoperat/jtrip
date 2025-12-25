@@ -523,18 +523,9 @@ function App() {
                   여행 목록을 불러오는 중...
                 </p>
               </div>
-            ) : travels.length === 0 ? (
-              <div className="text-center py-20">
-                <p className="text-slate-400 mb-4">
-                  아직 등록된 여행이 없습니다.
-                </p>
-                <p className="text-xs text-slate-300">
-                  새 여행을 만들어보세요!
-                </p>
-              </div>
             ) : (
               <>
-                {/* 초대 배너 */}
+                {/* 초대 배너 - 여행 목록과 관계없이 항상 표시 */}
                 <InvitationBanner
                   fetchMyInvitations={fetchMyInvitations}
                   acceptInvitation={acceptInvitation}
@@ -544,69 +535,85 @@ function App() {
                     // 여행 목록 새로고침은 acceptInvitation에서 이미 처리됨
                   }}
                 />
-                {travels.map((trip) => (
-                  <div
-                    key={trip.id}
-                    onClick={() => openTrip(trip)}
-                    className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-all cursor-pointer group"
-                  >
-                    <div className="h-36 relative">
-                      {trip.image ? (
-                        <img
-                          src={trip.image}
-                          alt={trip.title}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            e.target.nextElementSibling.style.display = "flex";
-                          }}
-                        />
-                      ) : null}
+                {travels.length === 0 ? (
+                  <div className="text-center py-20">
+                    <p className="text-slate-400 mb-4">
+                      아직 등록된 여행이 없습니다.
+                    </p>
+                    <p className="text-xs text-slate-300">
+                      새 여행을 만들어보세요!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {travels.map((trip) => (
                       <div
-                        className={`w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center ${
-                          trip.image ? "hidden" : ""
-                        }`}
+                        key={trip.id}
+                        onClick={() => openTrip(trip)}
+                        className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-all cursor-pointer group"
                       >
-                        <div className="text-center text-white">
-                          <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-80" />
-                          <p className="text-xs font-bold opacity-60">
-                            {trip.title}
-                          </p>
+                        <div className="h-36 relative">
+                          {trip.image ? (
+                            <img
+                              src={trip.image}
+                              alt={trip.title}
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                              onError={(e) => {
+                                e.target.style.display = "none";
+                                e.target.nextElementSibling.style.display =
+                                  "flex";
+                              }}
+                            />
+                          ) : null}
+                          <div
+                            className={`w-full h-full bg-gradient-to-br from-blue-400 via-purple-500 to-pink-500 flex items-center justify-center ${
+                              trip.image ? "hidden" : ""
+                            }`}
+                          >
+                            <div className="text-center text-white">
+                              <MapIcon className="w-12 h-12 mx-auto mb-2 opacity-80" />
+                              <p className="text-xs font-bold opacity-60">
+                                {trip.title}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                          <div className="absolute bottom-4 left-4 text-white">
+                            <h3 className="text-xl font-bold">{trip.title}</h3>
+                            <p className="text-[10px] opacity-80 font-medium">
+                              {trip.date}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="p-4 flex justify-between items-center bg-white">
+                          <div className="flex -space-x-2">
+                            {trip.participants.map((p, i) => (
+                              <div
+                                key={i}
+                                className="w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold"
+                                title={p.name}
+                              >
+                                {typeof p.image === "string" &&
+                                p.image.startsWith("http") ? (
+                                  <img
+                                    src={p.image}
+                                    alt={p.name}
+                                    className="w-full h-full rounded-full object-cover"
+                                  />
+                                ) : (
+                                  p.image ||
+                                  p.name?.charAt(0)?.toUpperCase() ||
+                                  "U"
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-200" />
                         </div>
                       </div>
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-                      <div className="absolute bottom-4 left-4 text-white">
-                        <h3 className="text-xl font-bold">{trip.title}</h3>
-                        <p className="text-[10px] opacity-80 font-medium">
-                          {trip.date}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="p-4 flex justify-between items-center bg-white">
-                      <div className="flex -space-x-2">
-                        {trip.participants.map((p, i) => (
-                          <div
-                            key={i}
-                            className="w-8 h-8 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold"
-                            title={p.name}
-                          >
-                            {typeof p.image === "string" &&
-                            p.image.startsWith("http") ? (
-                              <img
-                                src={p.image}
-                                alt={p.name}
-                                className="w-full h-full rounded-full object-cover"
-                              />
-                            ) : (
-                              p.image || p.name?.charAt(0)?.toUpperCase() || "U"
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <ChevronRight className="w-5 h-5 text-slate-200" />
-                    </div>
-                  </div>
-                ))}
+                    ))}
+                  </>
+                )}
               </>
             )}
             <button

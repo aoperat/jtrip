@@ -317,8 +317,13 @@ export function useTravels() {
         if (inviteError.code === "23505") {
           throw new Error("이미 초대된 사용자입니다.");
         }
-        if (inviteError.code === "42P01" || inviteError.message?.includes("does not exist")) {
-          throw new Error("초대 기능을 사용하려면 데이터베이스 설정이 필요합니다. (travel_invitations 테이블)");
+        if (
+          inviteError.code === "42P01" ||
+          inviteError.message?.includes("does not exist")
+        ) {
+          throw new Error(
+            "초대 기능을 사용하려면 데이터베이스 설정이 필요합니다. (travel_invitations 테이블)"
+          );
         }
         throw inviteError;
       }
@@ -354,17 +359,37 @@ export function useTravels() {
       } = await supabase.auth.getUser();
       if (!user) return { data: [], error: null };
 
-      // 테이블이 존재하지 않을 수 있으므로 기본 쿼리만 사용
-      const { data: invitations, error } = await supabase
+      // 내 프로필에서 이메일 가져오기
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("email")
+        .eq("id", user.id)
+        .single();
+
+      // 초대받은 사람(invitee)만 필터링 - 초대 보낸 사람(inviter)은 제외
+      // invitee_id 또는 invitee_email로 필터링
+      let query = supabase
         .from("travel_invitations")
         .select("*")
-        .or(`invitee_id.eq.${user.id},invitee_email.eq.${user.email}`)
-        .eq("status", "pending")
-        .order("created_at", { ascending: false });
+        .eq("status", "pending");
 
-      // 테이블이 없거나 에러가 있으면 빈 배열 반환
+      if (profile?.email) {
+        // invitee_id가 현재 사용자이거나 invitee_email이 현재 사용자 이메일인 경우
+        query = query.or(
+          `invitee_id.eq.${user.id},invitee_email.eq.${profile.email}`
+        );
+      } else {
+        query = query.eq("invitee_id", user.id);
+      }
+
+      const { data: invitations, error } = await query.order("created_at", {
+        ascending: false,
+      });
+
+      // 에러 처리 및 로깅
       if (error) {
-        // 테이블이 없거나 권한 문제 등 - 조용히 빈 배열 반환
+        console.error("초대 목록 조회 오류:", error);
+        // 테이블이 없거나 권한 문제 등
         if (
           error.code === "42P01" ||
           error.code?.startsWith("PGRST") ||

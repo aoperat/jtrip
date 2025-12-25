@@ -63,7 +63,7 @@ export default function SettingsView({ user, onClose, onSignOut }) {
             .from('profiles')
             .insert({
               id: user.id,
-              nickname: defaultNickname,
+              name: defaultNickname,
             });
           
           if (createError) {
@@ -92,7 +92,7 @@ export default function SettingsView({ user, onClose, onSignOut }) {
         }
       } else {
         // 프로필이 있는 경우
-        setNickname(data?.nickname || user.email?.split('@')[0] || 'User');
+        setNickname(data?.name || user.email?.split('@')[0] || 'User');
         setAvatarUrl(data?.avatar_url || '');
       }
     } catch (err) {
@@ -135,7 +135,12 @@ export default function SettingsView({ user, onClose, onSignOut }) {
       const { data: uploadData, error: uploadError } = await uploadAvatar(file, user.id);
       
       if (uploadError) {
-        setError(uploadError.message || '이미지 업로드에 실패했습니다.');
+        // 버킷이 없는 경우 사용자 친화적인 메시지 표시
+        if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('not found')) {
+          setError('Storage 버킷이 설정되지 않았습니다. Supabase 대시보드에서 "profiles" 버킷을 생성해주세요.');
+        } else {
+          setError(uploadError.message || '이미지 업로드에 실패했습니다.');
+        }
         setPreviewUrl('');
         return;
       }
@@ -210,7 +215,7 @@ export default function SettingsView({ user, onClose, onSignOut }) {
 
     setIsSaving(true);
     try {
-      const updateData = { nickname: nickname.trim() };
+      const updateData = { name: nickname.trim() };
       
       // 미리보기가 있고 아직 업데이트되지 않았다면 URL 포함
       if (previewUrl && previewUrl !== avatarUrl && !previewUrl.startsWith('data:')) {
