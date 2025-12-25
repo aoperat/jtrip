@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { Camera, Image as ImageIcon, X } from "lucide-react";
 import PlaceSearchInput from "./PlaceSearchInput";
 import { uploadItineraryImage, captureImageFromCamera, selectImageFromAlbum } from "../lib/storage";
@@ -16,6 +16,14 @@ export default function AddItineraryModal({
   const [imagePreview, setImagePreview] = useState(null);
   const [imageFile, setImageFile] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
+  
+  // 드래그 관련 상태
+  const [dragY, setDragY] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartY = useRef(0);
+  const modalRef = useRef(null);
+  const contentRef = useRef(null);
+  const scrollStartY = useRef(0);
 
   const handlePlaceSelect = (data) => {
     setLocationData(data);
@@ -43,6 +51,74 @@ export default function AddItineraryModal({
   const handleRemoveImage = () => {
     setImagePreview(null);
     setImageFile(null);
+  };
+
+  // 드래그 시작
+  const handleDragStart = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // 스크롤 가능한 경우 스크롤 위치 확인
+    if (contentRef.current) {
+      scrollStartY.current = contentRef.current.scrollTop;
+    }
+    
+    setIsDragging(true);
+    dragStartY.current = e.touches ? e.touches[0].clientY : e.clientY;
+    setDragY(0);
+  };
+
+  // 모달 콘텐츠 드래그 시작 (모바일 전체 드래그용)
+  const handleContentDragStart = (e) => {
+    // 스크롤이 최상단일 때만 드래그 시작
+    if (contentRef.current && contentRef.current.scrollTop === 0) {
+      handleDragStart(e);
+    }
+  };
+
+  // 드래그 중
+  const handleDragMove = (e) => {
+    if (!isDragging) return;
+    
+    const currentY = e.touches ? e.touches[0].clientY : e.clientY;
+    const deltaY = currentY - dragStartY.current;
+    
+    // 아래로 드래그하고 있고, 스크롤이 최상단이거나 드래그가 이미 시작된 경우에만 적용
+    if (deltaY > 0) {
+      // 스크롤이 있는 경우 드래그를 방지
+      if (contentRef.current && contentRef.current.scrollTop > 0 && scrollStartY.current === 0) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      setDragY(deltaY);
+    }
+  };
+
+  // 드래그 종료
+  const handleDragEnd = () => {
+    if (!isDragging) return;
+    
+    // 일정 거리(100px) 이상 드래그하면 모달 닫기
+    if (dragY > 100) {
+      setShowAddItineraryModal(false);
+      setLocationData(null);
+      setImagePreview(null);
+      setImageFile(null);
+    }
+    
+    setIsDragging(false);
+    setDragY(0);
+  };
+
+  // 배경 클릭으로 닫기
+  const handleBackdropClick = (e) => {
+    if (e.target === e.currentTarget) {
+      setShowAddItineraryModal(false);
+      setLocationData(null);
+      setImagePreview(null);
+      setImageFile(null);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -104,13 +180,45 @@ export default function AddItineraryModal({
   };
 
   return (
-    <div className="absolute inset-0 z-[210] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
-      <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
+    <div 
+      className="absolute inset-0 z-[210] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300"
+      onClick={handleBackdropClick}
+    >
+      <div 
+        ref={modalRef}
+        className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto"
+        style={{
+          transform: dragY > 0 ? `translateY(${dragY}px)` : 'translateY(0)',
+          transition: isDragging ? 'none' : 'transform 0.3s ease-out',
+          touchAction: isDragging ? 'pan-y' : 'auto',
+        }}
+        onTouchStart={handleContentDragStart}
+        onTouchMove={handleDragMove}
+        onTouchEnd={handleDragEnd}
+      >
+        <div 
+          className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8 cursor-grab active:cursor-grabbing drag-handle touch-none select-none"
+          onMouseDown={handleDragStart}
+          onTouchStart={handleDragStart}
+          onMouseMove={handleDragMove}
+          onTouchMove={handleDragMove}
+          onMouseUp={handleDragEnd}
+          onMouseLeave={handleDragEnd}
+        />
         <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
           일정 추가 📅
         </h2>
-        <form onSubmit={handleSubmit} className="space-y-4 mb-10">
+        <form 
+          ref={contentRef}
+          onSubmit={handleSubmit} 
+          className="space-y-4 mb-10"
+          onTouchStart={(e) => {
+            // 폼 내부에서 스크롤 가능하도록
+            if (contentRef.current && contentRef.current.scrollTop > 0) {
+              e.stopPropagation();
+            }
+          }}
+        >
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
               일차
