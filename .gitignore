@@ -11,6 +11,7 @@ node_modules
 supabase
 
 dist
+guide
 dist-ssr
 *.local
 

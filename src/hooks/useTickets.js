@@ -185,6 +185,28 @@ export function useTickets(travelId) {
     }
   };
 
+  const updateTicketType = async (id, ticketData) => {
+    try {
+      const { data, error: updateError } = await supabase
+        .from('ticket_types')
+        .update({
+          name: ticketData.name,
+          mode: ticketData.mode,
+          linked_itinerary_id: ticketData.linkedItineraryId || null,
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      await fetchTickets();
+      return { data, error: null };
+    } catch (err) {
+      console.error('티켓 타입 수정 실패:', err);
+      return { data: null, error: err };
+    }
+  };
+
   const deleteTicketType = async (id) => {
     try {
       const { error: deleteError } = await supabase
@@ -206,6 +228,7 @@ export function useTickets(travelId) {
     loading,
     error,
     createTicketType,
+    updateTicketType,
     createRegistration,
     deleteRegistration,
     deleteTicketType,
