@@ -49,6 +49,8 @@ import MapView from "./components/MapView";
 import SettingsView from "./components/SettingsView";
 import MemberManagementModal from "./components/MemberManagementModal";
 import InvitationBanner from "./components/InvitationBanner";
+import QRScannerModal from "./components/QRScannerModal";
+import TicketViewModal from "./components/TicketViewModal";
 import { useTravels } from "./hooks/useTravels";
 import { useItinerary } from "./hooks/useItinerary";
 import { useTickets } from "./hooks/useTickets";
@@ -103,6 +105,7 @@ function App() {
   const [isUploadingTicket, setIsUploadingTicket] = useState(false);
   const [registrationMethod, setRegistrationMethod] = useState("image"); // "image" | "code" | "url"
   const [ticketUrl, setTicketUrl] = useState("");
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const [notifications, setNotifications] = useState([]);
   const [travelImagePreview, setTravelImagePreview] = useState("");
   const [travelImageFile, setTravelImageFile] = useState(null);
@@ -160,6 +163,8 @@ function App() {
     updateTicketType,
     deleteTicketType,
     createRegistration,
+    deleteRegistrationById,
+    refetch: refetchTickets,
   } = useTickets(selectedTripId);
   const {
     expenses,
@@ -238,6 +243,16 @@ function App() {
         notices: notices || [],
       }
     : null;
+
+  // selectedTicketType을 ticketTypes 변경 시 동기화
+  useEffect(() => {
+    if (selectedTicketType && ticketTypes) {
+      const updated = ticketTypes.find((t) => t.id === selectedTicketType.id);
+      if (updated && JSON.stringify(updated) !== JSON.stringify(selectedTicketType)) {
+        setSelectedTicketType(updated);
+      }
+    }
+  }, [ticketTypes, selectedTicketType]);
 
   const addNotification = (msg) => {
     const id = Date.now();
@@ -526,7 +541,15 @@ function App() {
   const handleTicketSubmit = async (imageFile, code, typeOverride = null) => {
     const registrationType = typeOverride || ticketType;
 
-    if (!selectedTicketType || !code.trim()) {
+    // URL 타입이거나 이미지가 없으면 코드 필수
+    const codeRequired = registrationType === "url" || !imageFile;
+
+    if (!selectedTicketType) {
+      alert("티켓 타입을 선택해주세요.");
+      return;
+    }
+
+    if (codeRequired && !code.trim()) {
       alert(
         registrationType === "url"
           ? "URL을 입력해주세요."
@@ -3232,8 +3255,8 @@ function App() {
                 <p className="text-xs text-slate-400 mb-8 font-medium">
                   바코드, QR, 영수증 이미지를 선택하세요.
                 </p>
-                <div className="grid grid-cols-2 gap-4 mb-4">
-                  <label className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50 active:scale-95 cursor-pointer">
+                <div className="grid grid-cols-3 gap-3 mb-4">
+                  <label className="flex flex-col items-center gap-3 p-5 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50 active:scale-95 cursor-pointer">
                     <input
                       type="file"
                       accept="image/*"
@@ -3247,11 +3270,11 @@ function App() {
                       }}
                     />
                     <Camera className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                    <span className="text-xs font-bold text-slate-600 group-hover:text-blue-600">
-                      카메라 촬영
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-blue-600">
+                      촬영
                     </span>
                   </label>
-                  <label className="flex flex-col items-center gap-3 p-6 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50 active:scale-95 cursor-pointer">
+                  <label className="flex flex-col items-center gap-3 p-5 bg-slate-50 rounded-3xl group transition-all hover:bg-blue-50 active:scale-95 cursor-pointer">
                     <input
                       type="file"
                       accept="image/*"
@@ -3264,14 +3287,54 @@ function App() {
                       }}
                     />
                     <ImageIcon className="w-6 h-6 text-slate-300 group-hover:text-blue-500 transition-colors" />
-                    <span className="text-xs font-bold text-slate-600 group-hover:text-blue-600">
-                      앨범 선택
+                    <span className="text-[10px] font-bold text-slate-600 group-hover:text-blue-600">
+                      앨범
                     </span>
                   </label>
+                  <button
+                    onClick={() => setShowQRScanner(true)}
+                    className="flex flex-col items-center gap-3 p-5 bg-blue-50 rounded-3xl group transition-all hover:bg-blue-100 active:scale-95"
+                  >
+                    <QrCode className="w-6 h-6 text-blue-500" />
+                    <span className="text-[10px] font-bold text-blue-600">
+                      스캔
+                    </span>
+                  </button>
                 </div>
               </>
             ) : registrationMethod === "image" && ticketImagePreview ? (
               <div className="space-y-4 mb-6">
+                {/* 이미지 미리보기 */}
+                <div className="relative">
+                  <img
+                    src={ticketImagePreview}
+                    alt="티켓 미리보기"
+                    className="w-full max-h-40 object-contain rounded-2xl bg-slate-50 border border-slate-100"
+                  />
+                  <button
+                    onClick={() => {
+                      setTicketImageFile(null);
+                      setTicketImagePreview(null);
+                      setTicketCode("");
+                    }}
+                    className="absolute top-2 right-2 p-2 bg-red-500 text-white rounded-full shadow-lg active:scale-90 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* 자동 인식 결과 */}
+                {ticketCode && (
+                  <div className="bg-green-50 border border-green-100 p-3 rounded-2xl">
+                    <p className="text-[10px] text-green-500 font-black uppercase tracking-widest mb-1">
+                      자동 인식됨
+                    </p>
+                    <p className="text-green-700 font-mono font-bold text-sm break-all">
+                      {ticketCode}
+                    </p>
+                  </div>
+                )}
+
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
                     티켓 타입
@@ -3303,15 +3366,14 @@ function App() {
                 </div>
                 <div>
                   <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-                    코드 번호
+                    코드 번호 <span className="text-slate-300">(선택)</span>
                   </label>
                   <input
                     type="text"
                     value={ticketCode}
                     onChange={(e) => setTicketCode(e.target.value)}
                     className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="코드 번호를 입력하세요"
-                    autoFocus
+                    placeholder="코드 번호 (선택사항)"
                   />
                 </div>
                 <div className="flex gap-3">
@@ -3319,6 +3381,8 @@ function App() {
                     onClick={() => {
                       setRegistrationMethod("image");
                       setTicketCode("");
+                      setTicketImageFile(null);
+                      setTicketImagePreview(null);
                     }}
                     className="flex-1 py-4 bg-slate-100 rounded-2xl font-bold text-slate-500 active:scale-95"
                   >
@@ -3326,11 +3390,7 @@ function App() {
                   </button>
                   <button
                     onClick={async () => {
-                      if (!ticketCode.trim()) {
-                        alert("코드 번호를 입력해주세요.");
-                        return;
-                      }
-                      await handleTicketSubmit(null, ticketCode);
+                      await handleTicketSubmit(ticketImageFile, ticketCode);
                     }}
                     disabled={isUploadingTicket}
                     className="flex-[2] py-4 bg-blue-600 rounded-2xl font-bold text-white shadow-xl shadow-blue-100 active:scale-95 disabled:opacity-50"
@@ -4331,44 +4391,28 @@ function App() {
 
       {/* -------------------- MODAL: TICKET SCANNER VIEW -------------------- */}
       {viewingTicket && (
-        <div className="absolute inset-0 z-[200] bg-white animate-in fade-in zoom-in-95 duration-300 flex flex-col items-center justify-center p-8 text-center">
-          <button
-            onClick={() => setViewingTicket(null)}
-            className="absolute top-8 right-8 p-3 bg-slate-50 rounded-full text-slate-400 active:scale-90"
-          >
-            <X className="w-6 h-6" />
-          </button>
-          <span className="px-3 py-1 bg-blue-100 text-blue-600 text-[10px] font-black rounded-full uppercase mb-4 tracking-widest">
-            Live Scan ready
-          </span>
-          <h2 className="text-2xl font-black text-slate-900 leading-tight mb-10">
-            {selectedTicketType?.name}
-          </h2>
+        <TicketViewModal
+          ticket={viewingTicket}
+          ticketType={selectedTicketType}
+          onClose={() => setViewingTicket(null)}
+          onDelete={viewingTicket?.id ? async () => {
+            await deleteRegistrationById(viewingTicket.id);
+            setViewingTicket(null);
+          } : null}
+        />
+      )}
 
-          <div className="bg-white p-8 rounded-[50px] border-[6px] border-slate-900 shadow-2xl w-full max-w-[320px] flex flex-col items-center gap-8 relative overflow-hidden">
-            <div className="absolute top-0 inset-x-0 h-2 bg-slate-900 opacity-5 animate-scan" />
-            {viewingTicket?.type === "QR" ? (
-              <QrCode className="w-52 h-52 text-slate-900" />
-            ) : (
-              <Barcode className="w-52 h-32 text-slate-900" />
-            )}
-            <div className="w-full pt-8 border-t-4 border-dashed border-slate-50">
-              <p className="text-[10px] text-slate-300 font-bold uppercase tracking-widest mb-1 leading-none tracking-tighter">
-                Voucher Number
-              </p>
-              <p className="text-2xl font-mono font-black text-slate-900 tracking-tighter">
-                {viewingTicket?.code || "N/A"}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => setViewingTicket(null)}
-            className="mt-12 w-full max-w-[320px] py-5 bg-slate-900 rounded-[28px] font-black text-white flex items-center justify-center gap-3 active:scale-95 shadow-2xl shadow-slate-200 transition-all"
-          >
-            <Maximize2 className="w-6 h-6" /> 스캔용 밝기 고정
-          </button>
-        </div>
+      {/* -------------------- MODAL: QR SCANNER -------------------- */}
+      {showQRScanner && (
+        <QRScannerModal
+          onScan={(code, format) => {
+            setTicketCode(code);
+            setTicketType(format);
+            setShowQRScanner(false);
+            setRegistrationMethod('code');
+          }}
+          onClose={() => setShowQRScanner(false)}
+        />
       )}
     </div>
   );

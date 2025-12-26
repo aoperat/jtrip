@@ -73,24 +73,30 @@ export function useTickets(travelId) {
       // 프로토타입 형식에 맞게 변환
       const transformed = data.map((type) => {
         const registrations = {};
-        
+
         if (type.mode === 'group') {
           // 그룹 티켓: 첫 번째 등록을 'all'로
           const firstReg = type.registrations?.[0];
           if (firstReg) {
             registrations['all'] = {
+              id: firstReg.id,
               type: firstReg.type,
               code: firstReg.code,
+              imagePath: firstReg.image_path,
               uploadedBy: firstReg.uploaded_by,
+              uploadedAt: firstReg.uploaded_at,
             };
           }
         } else {
           // 개별 티켓: 사용자별로 매핑
           type.registrations?.forEach((reg) => {
             registrations[reg.user_id] = {
+              id: reg.id,
               type: reg.type,
               code: reg.code,
+              imagePath: reg.image_path,
               uploadedBy: reg.uploaded_by,
+              uploadedAt: reg.uploaded_at,
             };
           });
         }
@@ -186,6 +192,22 @@ export function useTickets(travelId) {
     }
   };
 
+  const deleteRegistrationById = async (registrationId) => {
+    try {
+      const { error: deleteError } = await supabase
+        .from('registrations')
+        .delete()
+        .eq('id', registrationId);
+
+      if (deleteError) throw deleteError;
+      await fetchTickets();
+      return { error: null };
+    } catch (err) {
+      console.error('티켓 등록 삭제 실패:', err);
+      return { error: err };
+    }
+  };
+
   const updateTicketType = async (id, ticketData) => {
     try {
       const { data, error: updateError } = await supabase
@@ -232,6 +254,7 @@ export function useTickets(travelId) {
     updateTicketType,
     createRegistration,
     deleteRegistration,
+    deleteRegistrationById,
     deleteTicketType,
     refetch: fetchTickets,
   };
