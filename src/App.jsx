@@ -113,6 +113,7 @@ function App() {
 
   // Registration Modals
   const [showAddTicketModal, setShowAddTicketModal] = useState(false);
+  const [showTicketLinkModal, setShowTicketLinkModal] = useState(false);
   const [showAddPrepModal, setShowAddPrepModal] = useState(false);
   const [showAddInfoModal, setShowAddInfoModal] = useState(false);
   const [showAddNoticeModal, setShowAddNoticeModal] = useState(false);
@@ -2823,6 +2824,89 @@ function App() {
         />
       )}
 
+      {/* TICKET LINK SELECTION MODAL */}
+      {showTicketLinkModal && selectedItineraryItem && (
+        <div className="fixed inset-0 z-[200] flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 animate-in fade-in duration-300"
+            onClick={() => setShowTicketLinkModal(false)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-t-[40px] p-8 pb-12 animate-in slide-in-from-bottom duration-500 max-h-[80vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
+            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">
+              퀵패스 연결 🎟️
+            </h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              {selectedItineraryItem.title}에 연결할 퀵패스를 선택하세요
+            </p>
+
+            {/* 기존 퀵패스 목록 */}
+            <div className="space-y-3 mb-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                기존 퀵패스 연동
+              </p>
+              {ticketTypes?.filter(t => !t.linkedItineraryId).map((ticket) => (
+                <button
+                  key={ticket.id}
+                  onClick={async () => {
+                    const result = await updateTicketType(ticket.id, {
+                      ...ticket,
+                      linkedItineraryId: selectedItineraryItem.id,
+                    });
+                    if (!result.error) {
+                      addNotification(`${ticket.name}이(가) 연동되었습니다.`);
+                      setShowTicketLinkModal(false);
+                    }
+                  }}
+                  className="w-full p-4 bg-orange-50 border border-orange-100 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition-all text-left"
+                >
+                  <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-orange-500 shadow-sm">
+                    <Ticket className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800">{ticket.name}</p>
+                    <p className="text-xs text-slate-400">
+                      {ticket.mode === 'group' ? '공용' : '개별'} ·
+                      {Object.keys(ticket.registrations || {}).length > 0
+                        ? ` ${Object.keys(ticket.registrations).length}명 등록됨`
+                        : ' 미등록'}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-orange-300" />
+                </button>
+              ))}
+            </div>
+
+            {/* 구분선 */}
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs text-slate-400 font-medium">또는</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            {/* 새 퀵패스 생성 버튼 */}
+            <button
+              onClick={() => {
+                setShowTicketLinkModal(false);
+                setShowAddTicketModal(true);
+              }}
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-blue-100"
+            >
+              <Plus className="w-5 h-5" />
+              새 퀵패스 생성
+            </button>
+
+            {/* 취소 버튼 */}
+            <button
+              onClick={() => setShowTicketLinkModal(false)}
+              className="w-full py-4 mt-3 bg-slate-100 text-slate-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* PREP MODAL */}
       {showAddPrepModal && (
         <CreateLinkModal
@@ -3796,7 +3880,13 @@ function App() {
             setSelectedItineraryItem(null);
           }}
           onCreateTicket={() => {
-            setShowAddTicketModal(true);
+            // 연동되지 않은 기존 퀵패스가 있으면 선택 모달 표시
+            const unlinkedTickets = ticketTypes?.filter(t => !t.linkedItineraryId) || [];
+            if (unlinkedTickets.length > 0) {
+              setShowTicketLinkModal(true);
+            } else {
+              setShowAddTicketModal(true);
+            }
           }}
           onCreatePrep={() => {
             setShowAddPrepModal(true);
