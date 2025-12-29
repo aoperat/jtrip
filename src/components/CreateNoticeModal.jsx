@@ -1,17 +1,18 @@
 import { useState } from 'react';
 
-const CreateNoticeModal = ({ 
-  onClose, 
+const CreateNoticeModal = ({
+  onClose,
   onCreate,
   onUpdate,
   initialData
 }) => {
+  const [title, setTitle] = useState(initialData?.title || '');
   const [content, setContent] = useState(initialData?.content || '');
   const isEditMode = !!initialData;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!content.trim()) {
       alert('공지사항 내용을 입력해주세요.');
       return;
@@ -19,11 +20,11 @@ const CreateNoticeModal = ({
 
     try {
       if (isEditMode && onUpdate) {
-        await onUpdate(initialData.id, content.trim());
+        await onUpdate(initialData.id, { title: title.trim(), content: content.trim() });
       } else if (onCreate) {
-        await onCreate({ content: content.trim() });
+        await onCreate({ title: title.trim(), content: content.trim() });
       }
-      
+
       onClose();
     } catch (error) {
       console.error('저장 실패:', error);
@@ -36,15 +37,27 @@ const CreateNoticeModal = ({
       <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
         <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
-          {isEditMode ? '공지사항 수정 📢' : '공지사항 등록 📢'}
+          {isEditMode ? '공지사항 수정' : '공지사항 등록'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4 mb-10">
           <div>
             <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-              공지사항 내용
+              제목 (선택)
+            </label>
+            <input
+              type="text"
+              autoFocus
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+              placeholder="공지 제목을 입력하세요..."
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+              내용
             </label>
             <textarea
-              autoFocus
               value={content}
               onChange={(e) => setContent(e.target.value)}
               className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm resize-none"

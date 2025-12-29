@@ -51,6 +51,7 @@ import MemberManagementModal from "./components/MemberManagementModal";
 import InvitationBanner from "./components/InvitationBanner";
 import QRScannerModal from "./components/QRScannerModal";
 import TicketViewModal from "./components/TicketViewModal";
+import ItineraryCard from "./components/ItineraryCard";
 import { useTravels } from "./hooks/useTravels";
 import { useItinerary } from "./hooks/useItinerary";
 import { useTickets } from "./hooks/useTickets";
@@ -82,14 +83,25 @@ function App() {
     removeParticipant,
   } = useTravels();
 
-  const [view, setView] = useState("home");
+  // sessionStorage에서 초기 상태 복원
+  const [view, setView] = useState(() => {
+    return sessionStorage.getItem("jtrip_view") || "home";
+  });
   const [viewHistory, setViewHistory] = useState([]); // 뷰 히스토리 추적
-  const [activeTab, setActiveTab] = useState("schedule");
+  const [activeTab, setActiveTab] = useState(() => {
+    return sessionStorage.getItem("jtrip_activeTab") || "schedule";
+  });
   const [tabHistory, setTabHistory] = useState([]); // 탭 히스토리 추적
   const [scheduleMode, setScheduleMode] = useState("list");
 
-  const [selectedTripId, setSelectedTripId] = useState(null);
-  const [selectedDay, setSelectedDay] = useState(1);
+  const [selectedTripId, setSelectedTripId] = useState(() => {
+    return sessionStorage.getItem("jtrip_selectedTripId") || null;
+  });
+  const [selectedDay, setSelectedDay] = useState(() => {
+    const saved = sessionStorage.getItem("jtrip_selectedDay");
+    if (saved === "all") return "all";
+    return saved ? parseInt(saved) : 1;
+  });
   const [checkedItems, setCheckedItems] = useState(new Set());
 
   const [selectedTicketType, setSelectedTicketType] = useState(null);
@@ -248,6 +260,41 @@ function App() {
         notices: notices || [],
       }
     : null;
+
+  // 저장된 tripId가 유효한지 확인 (travels 로드 후)
+  useEffect(() => {
+    if (travels.length > 0 && selectedTripId) {
+      const tripExists = travels.some((t) => t.id === selectedTripId);
+      if (!tripExists) {
+        // 저장된 여행이 더 이상 존재하지 않으면 초기화
+        setSelectedTripId(null);
+        setView("home");
+        sessionStorage.removeItem("jtrip_selectedTripId");
+        sessionStorage.setItem("jtrip_view", "home");
+      }
+    }
+  }, [travels]);
+
+  // 상태 변경 시 sessionStorage에 저장
+  useEffect(() => {
+    sessionStorage.setItem("jtrip_view", view);
+  }, [view]);
+
+  useEffect(() => {
+    sessionStorage.setItem("jtrip_activeTab", activeTab);
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (selectedTripId) {
+      sessionStorage.setItem("jtrip_selectedTripId", selectedTripId);
+    } else {
+      sessionStorage.removeItem("jtrip_selectedTripId");
+    }
+  }, [selectedTripId]);
+
+  useEffect(() => {
+    sessionStorage.setItem("jtrip_selectedDay", String(selectedDay));
+  }, [selectedDay]);
 
   // selectedTicketType을 ticketTypes 변경 시 동기화
   useEffect(() => {
@@ -458,6 +505,98 @@ function App() {
       setEditingVariantItem(null);
       addNotification("일정이 수정되었습니다.");
     }
+  };
+
+  // 플랜그룹 아이템을 EditItineraryModal이 기대하는 형식으로 변환
+  const convertVariantItemForEdit = (item, groupDay) => {
+    return {
+      id: item.id,
+      day: groupDay,
+      time: item.time || "",
+      title: item.title || "",
+      desc: item.desc || item.description || "",
+      locationName: item.locationName || null,
+      address: item.address || null,
+      latitude: item.latitude || null,
+      longitude: item.longitude || null,
+      image: item.image || null,
+      imagePositionX: item.imagePositionX ?? 0,
+      imagePositionY: item.imagePositionY ?? 0,
+      imageScale: item.imageScale || 400,
+    };
+  };
+
+  // 플랜 그룹에서 일정 수정 (풀 기능 - EditItineraryModal용)
+  const handleUpdateVariantItemFull = async (updates) => {
+    if (!editingVariantItem)
+      return { error: new Error("수정할 항목이 없습니다.") };
+
+    const { groupId, variantKey, item } = editingVariantItem;
+    const group = planGroups.find((g) => g.id === groupId);
+    if (!group || !group.variants[variantKey]) {
+      return { error: new Error("플랜 그룹을 찾을 수 없습니다.") };
+    }
+
+    // EditItineraryModal에서 전달하는 updates 구조를 플랜그룹 아이템 구조로 변환
+    const updatedItemData = {
+      title: updates.title,
+      time: updates.time || "",
+      image: updates.imageUrl || null,
+      desc: updates.description || "",
+      locationName: updates.locationName || null,
+      address: updates.address || null,
+      latitude: updates.latitude || null,
+      longitude: updates.longitude || null,
+      imagePositionX: updates.imagePositionX ?? 0,
+      imagePositionY: updates.imagePositionY ?? 0,
+      imageScale: updates.imageScale || 400,
+    };
+
+    const updatedItems = group.variants[variantKey].map((i) =>
+      i.id === item.id ? { ...i, ...updatedItemData } : i
+    );
+
+    const result = await updatePlanGroupVariantDb(
+      groupId,
+      variantKey,
+      updatedItems
+    );
+
+    if (!result.error) {
+      setEditingVariantItem(null);
+      addNotification("일정이 수정되었습니다.");
+    }
+
+    return result;
+  };
+
+  // 플랜 그룹에서 일정 삭제 (EditItineraryModal용 래퍼)
+  const handleDeleteVariantItemFromModal = async () => {
+    if (!editingVariantItem)
+      return { error: new Error("삭제할 항목이 없습니다.") };
+
+    const { groupId, variantKey, item } = editingVariantItem;
+    const group = planGroups.find((g) => g.id === groupId);
+    if (!group || !group.variants[variantKey]) {
+      return { error: new Error("플랜 그룹을 찾을 수 없습니다.") };
+    }
+
+    const updatedItems = group.variants[variantKey].filter(
+      (i) => i.id !== item.id
+    );
+
+    const result = await updatePlanGroupVariantDb(
+      groupId,
+      variantKey,
+      updatedItems
+    );
+
+    if (!result.error) {
+      setEditingVariantItem(null);
+      addNotification("일정이 삭제되었습니다.");
+    }
+
+    return result;
   };
 
   // 현재 선택된 날짜에서 그룹화된 아이템 ID 목록
@@ -739,28 +878,30 @@ function App() {
       {/* -------------------- VIEW: HOME -------------------- */}
       {view === "home" && (
         <div className="flex flex-col h-full animate-in fade-in duration-500">
-          <header className="px-6 pt-12 pb-6 bg-white/70 backdrop-blur-xl border-b border-slate-100 flex justify-between items-end sticky top-0 z-50">
-            <div>
-              <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
-                Trips
-              </h1>
-              <p className="text-[11px] text-blue-600 font-black uppercase tracking-widest mt-2">
-                Adventure Awaits
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <button className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors">
-                <Search className="w-5 h-5" />
-              </button>
-              <button
-                onClick={() => navigateToView("settings")}
-                className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"
-              >
-                <Settings className="w-5 h-5" />
-              </button>
+          <header className="px-6 pt-12 pb-6 bg-white/70 backdrop-blur-xl border-b border-slate-100 sticky top-0 z-50">
+            <div className="max-w-6xl mx-auto flex justify-between items-end">
+              <div>
+                <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
+                  Trips
+                </h1>
+                <p className="text-[11px] text-blue-600 font-black uppercase tracking-widest mt-2">
+                  Adventure Awaits
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors">
+                  <Search className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => navigateToView("settings")}
+                  className="p-2.5 bg-slate-50 rounded-2xl text-slate-400 hover:bg-slate-100 transition-colors"
+                >
+                  <Settings className="w-5 h-5" />
+                </button>
+              </div>
             </div>
           </header>
-          <main className="flex-1 overflow-y-auto p-6 space-y-4">
+          <main className="flex-1 overflow-y-auto p-6">
             {travelsLoading ? (
               <div className="text-center py-20">
                 <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
@@ -771,17 +912,19 @@ function App() {
             ) : (
               <>
                 {/* 초대 배너 - 여행 목록과 관계없이 항상 표시 */}
-                <InvitationBanner
-                  fetchMyInvitations={fetchMyInvitations}
-                  acceptInvitation={acceptInvitation}
-                  declineInvitation={declineInvitation}
-                  addNotification={addNotification}
-                  onAccepted={() => {
-                    // 여행 목록 새로고침은 acceptInvitation에서 이미 처리됨
-                  }}
-                />
+                <div className="max-w-6xl mx-auto mb-6">
+                  <InvitationBanner
+                    fetchMyInvitations={fetchMyInvitations}
+                    acceptInvitation={acceptInvitation}
+                    declineInvitation={declineInvitation}
+                    addNotification={addNotification}
+                    onAccepted={() => {
+                      // 여행 목록 새로고침은 acceptInvitation에서 이미 처리됨
+                    }}
+                  />
+                </div>
                 {travels.length === 0 ? (
-                  <div className="text-center py-20">
+                  <div className="text-center py-20 max-w-6xl mx-auto">
                     <p className="text-slate-400 mb-4">
                       아직 등록된 여행이 없습니다.
                     </p>
@@ -790,14 +933,14 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  <>
+                  <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {travels.map((trip) => (
                       <div
                         key={trip.id}
                         onClick={() => openTrip(trip)}
-                        className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 active:scale-[0.98] transition-all cursor-pointer group"
+                        className="bg-white rounded-[32px] overflow-hidden shadow-sm border border-slate-100 hover:shadow-lg hover:border-slate-200 active:scale-[0.98] transition-all cursor-pointer group"
                       >
-                        <div className="h-36 relative">
+                        <div className="h-40 md:h-48 relative">
                           {trip.image ? (
                             <img
                               src={trip.image}
@@ -899,19 +1042,21 @@ function App() {
                         </div>
                       </div>
                     ))}
-                  </>
+                  </div>
                 )}
               </>
             )}
-            <button
-              onClick={() => setShowCreateTripModal(true)}
-              className="w-full py-10 border-2 border-dashed border-slate-200 rounded-[32px] flex flex-col items-center justify-center text-slate-400 gap-2 hover:bg-white transition-all"
-            >
-              <Plus className="w-8 h-8" />
-              <span className="font-bold text-xs uppercase tracking-widest">
-                Plan New Trip
-              </span>
-            </button>
+            <div className="max-w-6xl mx-auto mt-6">
+              <button
+                onClick={() => setShowCreateTripModal(true)}
+                className="w-full py-10 border-2 border-dashed border-slate-200 rounded-[32px] flex flex-col items-center justify-center text-slate-400 gap-2 hover:bg-white hover:border-slate-300 transition-all"
+              >
+                <Plus className="w-8 h-8" />
+                <span className="font-bold text-xs uppercase tracking-widest">
+                  Plan New Trip
+                </span>
+              </button>
+            </div>
           </main>
         </div>
       )}
@@ -1290,7 +1435,7 @@ function App() {
                                                   >
                                                     {/* 배경 이미지 오버레이 */}
                                                     {displayItem.image && (
-                                                      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
+                                                      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-[1] pointer-events-none" />
                                                     )}
                                                     <div className="flex-1 min-w-0 relative z-10">
                                                       <p
@@ -1314,7 +1459,7 @@ function App() {
                                                     </div>
                                                     {/* + / 수정 / 삭제 버튼 */}
                                                     <div
-                                                      className="flex gap-1"
+                                                      className="flex gap-1 z-10"
                                                       onClick={(e) =>
                                                         e.stopPropagation()
                                                       }
@@ -1440,203 +1585,38 @@ function App() {
                                       (ex) => ex.linkedItineraryId === item.id
                                     );
                                   return (
-                                    <div
+                                    <ItineraryCard
                                       key={item.id}
-                                      className="relative pl-8 flex items-start gap-3 animate-in slide-in-from-bottom-2"
-                                    >
-                                      <button
-                                        onClick={() => toggleItemCheck(item.id)}
-                                        className="absolute left-0 top-2 p-0.5 z-10 transition-all"
-                                      >
-                                        {isChecked ? (
-                                          <CheckSquare
-                                            className="w-5 h-5 text-blue-500"
-                                            strokeWidth={2.5}
-                                          />
-                                        ) : (
-                                          <Square
-                                            className="w-5 h-5 text-slate-300"
-                                            strokeWidth={2.5}
-                                          />
-                                        )}
-                                      </button>
-                                      <div
-                                        onClick={() => {
-                                          setSelectedItineraryItem(item);
-                                        }}
-                                        className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group overflow-hidden ${
-                                          isChecked
-                                            ? "opacity-40 border-slate-100"
-                                            : "shadow-sm border-slate-100"
-                                        } ${
-                                          item.image
-                                            ? ""
-                                            : isChecked
-                                            ? "bg-slate-50"
-                                            : "bg-white"
-                                        }`}
-                                        style={
-                                          item.image
-                                            ? (() => {
-                                                // 카드 크기에 비례하여 backgroundPosition 계산
-                                                // 실제 카드는 flex-1로 크기가 가변적이므로,
-                                                // 저장된 픽셀 값을 백분율로 변환하여 적용
-                                                const standardWidth = 450;
-                                                const standardHeight = 130;
-                                                const percentX =
-                                                  ((item.imagePositionX ?? 0) /
-                                                    standardWidth) *
-                                                  100;
-                                                const percentY =
-                                                  ((item.imagePositionY ?? 0) /
-                                                    standardHeight) *
-                                                  100;
-                                                return {
-                                                  backgroundImage: `url(${item.image})`,
-                                                  backgroundSize: `${
-                                                    item.imageScale || 400
-                                                  }px`,
-                                                  backgroundPosition: `${percentX}% ${percentY}%`,
-                                                };
-                                              })()
-                                            : undefined
+                                      item={item}
+                                      isChecked={isChecked}
+                                      onToggleCheck={toggleItemCheck}
+                                      onClick={(item) => setSelectedItineraryItem(item)}
+                                      onAddSchedule={(item) => {
+                                        setAddingItineraryDay(dayInfo.day);
+                                        setAddingItineraryWithTime(item.time || null);
+                                        setPlanGroupContext(null);
+                                        setShowAddItineraryModal(true);
+                                      }}
+                                      onEdit={(item) => {
+                                        setSelectedItineraryItem(item);
+                                        setShowEditItineraryModal(true);
+                                      }}
+                                      onDelete={async (item) => {
+                                        if (confirm("일정을 삭제하시겠습니까?")) {
+                                          const result = await deleteItineraryItem(item.id);
+                                          if (result.error) {
+                                            alert("삭제 실패: " + result.error.message);
+                                          } else {
+                                            addNotification("일정이 삭제되었습니다.");
+                                          }
                                         }
-                                      >
-                                        {/* 배경 이미지 오버레이 */}
-                                        {item.image && (
-                                          <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
-                                        )}
-                                        <div
-                                          className="absolute top-2 right-2 flex gap-1 z-30"
-                                          onClick={(e) => e.stopPropagation()}
-                                        >
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setSelectedItineraryItem(item);
-                                              setShowEditItineraryModal(true);
-                                            }}
-                                            className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
-                                            title="수정"
-                                          >
-                                            <Edit2 className="w-3.5 h-3.5" />
-                                          </button>
-                                          <button
-                                            onClick={async (e) => {
-                                              e.stopPropagation();
-                                              if (
-                                                confirm(
-                                                  "일정을 삭제하시겠습니까?"
-                                                )
-                                              ) {
-                                                const result =
-                                                  await deleteItineraryItem(
-                                                    item.id
-                                                  );
-                                                if (result.error) {
-                                                  alert(
-                                                    "삭제 실패: " +
-                                                      result.error.message
-                                                  );
-                                                } else {
-                                                  addNotification(
-                                                    "일정이 삭제되었습니다."
-                                                  );
-                                                }
-                                              }
-                                            }}
-                                            className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                            title="삭제"
-                                          >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                          </button>
-                                        </div>
-                                        <div className="flex-1 overflow-hidden relative z-10">
-                                          <span
-                                            className={`text-[10px] font-bold uppercase tracking-widest ${
-                                              isChecked
-                                                ? item.image
-                                                  ? "text-white/60"
-                                                  : "text-slate-300"
-                                                : item.image
-                                                ? "text-white"
-                                                : "text-blue-500"
-                                            }`}
-                                          >
-                                            {item.time}
-                                          </span>
-                                          <h3
-                                            className={`font-bold text-sm leading-tight mt-1 ${
-                                              isChecked
-                                                ? item.image
-                                                  ? "text-white/70 line-through"
-                                                  : "text-slate-400 line-through"
-                                                : item.image
-                                                ? "text-white"
-                                                : "text-slate-800"
-                                            }`}
-                                          >
-                                            {item.title}
-                                          </h3>
-                                          {item.desc && (
-                                            <p
-                                              className={`text-[11px] mt-0.5 leading-tight ${
-                                                item.image
-                                                  ? "text-white/80"
-                                                  : "text-slate-400"
-                                              }`}
-                                            >
-                                              {item.desc}
-                                            </p>
-                                          )}
-                                          {/* 배지 - 하단 배치 */}
-                                          {(item.hasTicket || item.prepId || item.infoId || linkedExpense) && (
-                                            <div className="flex flex-wrap gap-1 mt-2">
-                                              {item.hasTicket && (
-                                                <LinkedBadge
-                                                  color="orange"
-                                                  icon={Ticket}
-                                                  label="TICKET"
-                                                  onClick={() =>
-                                                    navigateToTab("tickets")
-                                                  }
-                                                />
-                                              )}
-                                              {item.prepId && (
-                                                <LinkedBadge
-                                                  color="blue"
-                                                  icon={CheckSquare}
-                                                  label="PREP"
-                                                  onClick={() =>
-                                                    navigateToTab("preps")
-                                                  }
-                                                />
-                                              )}
-                                              {item.infoId && (
-                                                <LinkedBadge
-                                                  color="slate"
-                                                  icon={Info}
-                                                  label="INFO"
-                                                  onClick={() =>
-                                                    navigateToTab("info")
-                                                  }
-                                                />
-                                              )}
-                                              {linkedExpense && (
-                                                <LinkedBadge
-                                                  color="green"
-                                                  icon={DollarSign}
-                                                  label={`₩${linkedExpense.amount.toLocaleString()}`}
-                                                  onClick={() =>
-                                                    navigateToTab("budget")
-                                                  }
-                                                />
-                                              )}
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
+                                      }}
+                                      linkedExpense={linkedExpense}
+                                      onNavigateToTickets={() => navigateToTab("tickets")}
+                                      onNavigateToPreps={() => navigateToTab("preps")}
+                                      onNavigateToInfo={() => navigateToTab("info")}
+                                      onNavigateToBudget={() => navigateToTab("budget")}
+                                    />
                                   );
                                 })}
                               </div>
@@ -1881,7 +1861,7 @@ function App() {
                                                         true
                                                       );
                                                     }}
-                                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
+                                                    className="p-1.5 bg-white rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors shadow-sm"
                                                     title="일정 추가"
                                                   >
                                                     <Plus className="w-3.5 h-3.5" />
@@ -1896,7 +1876,7 @@ function App() {
                                                         item,
                                                       });
                                                     }}
-                                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                                    className="p-1.5 bg-white rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors shadow-sm"
                                                     title="수정"
                                                   >
                                                     <Edit2 className="w-3.5 h-3.5" />
@@ -1916,7 +1896,7 @@ function App() {
                                                         );
                                                       }
                                                     }}
-                                                    className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                                    className="p-1.5 bg-white rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors shadow-sm"
                                                     title="삭제"
                                                   >
                                                     <Trash2 className="w-3.5 h-3.5" />
@@ -1983,234 +1963,42 @@ function App() {
                                   (ex) => ex.linkedItineraryId === item.id
                                 );
                               return (
-                                <div
+                                <ItineraryCard
                                   key={item.id}
-                                  className="relative pl-8 flex items-start gap-3 animate-in slide-in-from-bottom-2"
-                                >
-                                  {selectionMode ? (
-                                    <button
-                                      onClick={() => toggleSelection(item.id)}
-                                      className={`absolute left-0 top-2 w-[24px] h-[24px] rounded-lg bg-white flex items-center justify-center z-10 transition-all border-2 ${
-                                        isSelected
-                                          ? "bg-blue-600 border-blue-600"
-                                          : "border-slate-300"
-                                      }`}
-                                    >
-                                      {isSelected && (
-                                        <Check
-                                          className="w-5 h-5 text-white"
-                                          strokeWidth={3}
-                                        />
-                                      )}
-                                    </button>
-                                  ) : (
-                                    <button
-                                      onClick={() => toggleItemCheck(item.id)}
-                                      className="absolute left-0 top-2 p-0.5 z-10 transition-all"
-                                    >
-                                      {isChecked ? (
-                                        <CheckSquare
-                                          className="w-5 h-5 text-blue-500"
-                                          strokeWidth={2.5}
-                                        />
-                                      ) : (
-                                        <Square
-                                          className="w-5 h-5 text-slate-300"
-                                          strokeWidth={2.5}
-                                        />
-                                      )}
-                                    </button>
-                                  )}
-                                  <div
-                                    onClick={() => {
-                                      if (selectionMode) {
-                                        toggleSelection(item.id);
+                                  item={item}
+                                  isChecked={isChecked}
+                                  isSelected={isSelected}
+                                  selectionMode={selectionMode}
+                                  onToggleCheck={toggleItemCheck}
+                                  onSelect={toggleSelection}
+                                  onClick={(item) => setSelectedItineraryItem(item)}
+                                  onAddSchedule={(item) => {
+                                    setAddingItineraryDay(selectedDay);
+                                    setAddingItineraryWithTime(item.time || null);
+                                    setPlanGroupContext(null);
+                                    setShowAddItineraryModal(true);
+                                  }}
+                                  onEdit={(item) => {
+                                    setSelectedItineraryItem(item);
+                                    setIsEditingFromDetail(false);
+                                    setShowEditItineraryModal(true);
+                                  }}
+                                  onDelete={async (item) => {
+                                    if (confirm("일정을 삭제하시겠습니까?")) {
+                                      const result = await deleteItineraryItem(item.id);
+                                      if (result.error) {
+                                        alert("삭제 실패: " + result.error.message);
                                       } else {
-                                        setSelectedItineraryItem(item);
+                                        addNotification("일정이 삭제되었습니다.");
                                       }
-                                    }}
-                                    className={`flex-1 p-4 rounded-3xl border transition-all cursor-pointer active:scale-[0.98] flex gap-3 relative group overflow-hidden ${
-                                      isSelected
-                                        ? "border-blue-500 ring-2 ring-blue-200"
-                                        : isChecked
-                                        ? "opacity-40 border-slate-100"
-                                        : "shadow-sm border-slate-100"
-                                    } ${
-                                      item.image
-                                        ? ""
-                                        : isSelected
-                                        ? "bg-blue-50"
-                                        : isChecked
-                                        ? "bg-slate-50"
-                                        : "bg-white"
-                                    }`}
-                                    style={
-                                      item.image
-                                        ? {
-                                            backgroundImage: `url(${item.image})`,
-                                            backgroundSize: `${
-                                              item.imageScale || 400
-                                            }px`,
-                                            backgroundPosition: `${
-                                              item.imagePositionX ?? 0
-                                            }px ${item.imagePositionY ?? 0}px`,
-                                          }
-                                        : undefined
                                     }
-                                  >
-                                    {/* 배경 이미지 오버레이 */}
-                                    {item.image && (
-                                      <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/40 to-black/60 z-0" />
-                                    )}
-                                    {!selectionMode && (
-                                      <div
-                                        className="absolute top-2 right-2 flex gap-1 z-30"
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setAddingItineraryDay(selectedDay);
-                                            setAddingItineraryWithTime(
-                                              item.time || null
-                                            );
-                                            setPlanGroupContext(null);
-                                            setShowAddItineraryModal(true);
-                                          }}
-                                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-green-50 hover:text-green-500 transition-colors"
-                                          title="일정 추가"
-                                        >
-                                          <Plus className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedItineraryItem(item);
-                                            setIsEditingFromDetail(false); // 카드에서 직접 열었으므로 false
-                                            setShowEditItineraryModal(true);
-                                          }}
-                                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
-                                          title="수정"
-                                        >
-                                          <Edit2 className="w-3.5 h-3.5" />
-                                        </button>
-                                        <button
-                                          onClick={async (e) => {
-                                            e.stopPropagation();
-                                            if (
-                                              confirm(
-                                                "일정을 삭제하시겠습니까?"
-                                              )
-                                            ) {
-                                              const result =
-                                                await deleteItineraryItem(
-                                                  item.id
-                                                );
-                                              if (result.error) {
-                                                alert(
-                                                  "삭제 실패: " +
-                                                    result.error.message
-                                                );
-                                              } else {
-                                                addNotification(
-                                                  "일정이 삭제되었습니다."
-                                                );
-                                              }
-                                            }
-                                          }}
-                                          className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
-                                          title="삭제"
-                                        >
-                                          <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                      </div>
-                                    )}
-                                    <div className="flex-1 overflow-hidden relative z-10">
-                                      <span
-                                        className={`text-[10px] font-bold uppercase tracking-widest ${
-                                          isChecked
-                                            ? item.image
-                                              ? "text-white/60"
-                                              : "text-slate-300"
-                                            : item.image
-                                            ? "text-white"
-                                            : "text-blue-500"
-                                        }`}
-                                      >
-                                        {item.time}
-                                      </span>
-                                      <h3
-                                        className={`font-bold text-sm leading-tight mt-1 ${
-                                          isChecked
-                                            ? item.image
-                                              ? "text-white/70 line-through"
-                                              : "text-slate-400 line-through"
-                                            : item.image
-                                            ? "text-white"
-                                            : "text-slate-800"
-                                        }`}
-                                      >
-                                        {item.title}
-                                      </h3>
-                                      {item.desc && (
-                                        <p
-                                          className={`text-[11px] mt-0.5 leading-tight ${
-                                            item.image
-                                              ? "text-white/80"
-                                              : "text-slate-400"
-                                          }`}
-                                        >
-                                          {item.desc}
-                                        </p>
-                                      )}
-                                      {/* 배지 - 하단 배치 */}
-                                      {!selectionMode && (item.hasTicket || item.prepId || item.infoId || linkedExpense) && (
-                                        <div className="flex flex-wrap gap-1 mt-2">
-                                          {item.hasTicket && (
-                                            <LinkedBadge
-                                              color="orange"
-                                              icon={Ticket}
-                                              label="TICKET"
-                                              onClick={() =>
-                                                navigateToTab("tickets")
-                                              }
-                                            />
-                                          )}
-                                          {item.prepId && (
-                                            <LinkedBadge
-                                              color="blue"
-                                              icon={CheckSquare}
-                                              label="PREP"
-                                              onClick={() =>
-                                                navigateToTab("preps")
-                                              }
-                                            />
-                                          )}
-                                          {item.infoId && (
-                                            <LinkedBadge
-                                              color="slate"
-                                              icon={Info}
-                                              label="INFO"
-                                              onClick={() =>
-                                                navigateToTab("info")
-                                              }
-                                            />
-                                          )}
-                                          {linkedExpense && (
-                                            <LinkedBadge
-                                              color="green"
-                                              icon={DollarSign}
-                                              label={`₩${linkedExpense.amount.toLocaleString()}`}
-                                              onClick={() =>
-                                                navigateToTab("budget")
-                                              }
-                                            />
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-                                  </div>
-                                </div>
+                                  }}
+                                  linkedExpense={linkedExpense}
+                                  onNavigateToTickets={() => navigateToTab("tickets")}
+                                  onNavigateToPreps={() => navigateToTab("preps")}
+                                  onNavigateToInfo={() => navigateToTab("info")}
+                                  onNavigateToBudget={() => navigateToTab("budget")}
+                                />
                               );
                             })}
                         </>
@@ -2677,7 +2465,12 @@ function App() {
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           </div>
-                          <p className="text-sm text-slate-800 font-medium leading-relaxed mb-2 relative z-10">
+                          {notice.title && (
+                            <h4 className="text-sm font-bold text-slate-900 mb-1 relative z-10 pr-16">
+                              {notice.title}
+                            </h4>
+                          )}
+                          <p className={`text-sm text-slate-700 leading-relaxed mb-2 relative z-10 ${!notice.title ? 'pr-16' : ''}`}>
                             {notice.content}
                           </p>
                           <span className="text-[10px] text-orange-400 font-black uppercase tracking-widest">
@@ -2821,7 +2614,13 @@ function App() {
           onClose={goBack}
           onSignOut={async () => {
             await signOut();
-            setViewHistory([]); // 로그아웃 시 히스토리 초기화
+            // 로그아웃 시 상태 및 sessionStorage 초기화
+            sessionStorage.removeItem("jtrip_view");
+            sessionStorage.removeItem("jtrip_activeTab");
+            sessionStorage.removeItem("jtrip_selectedTripId");
+            sessionStorage.removeItem("jtrip_selectedDay");
+            setViewHistory([]);
+            setSelectedTripId(null);
             setView("home");
           }}
         />
@@ -4029,79 +3828,23 @@ function App() {
       )}
 
       {/* -------------------- MODAL: EDIT PLAN VARIANT ITEM -------------------- */}
-      {editingVariantItem && (
-        <div
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[200] flex items-end justify-center"
-          onClick={() => setEditingVariantItem(null)}
-        >
-          <div
-            className="bg-white w-full max-w-lg rounded-t-[32px] p-6 animate-in slide-in-from-bottom-10 duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mb-6" />
-            <h3 className="text-lg font-black text-slate-800 mb-4">
-              플랜 {editingVariantItem.variantKey} 일정 수정
-            </h3>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.target);
-                const title = formData.get("title");
-                const time = formData.get("time");
-                if (!title.trim()) {
-                  addNotification("일정 제목을 입력해주세요.");
-                  return;
-                }
-                handleUpdateVariantItem(
-                  editingVariantItem.groupId,
-                  editingVariantItem.variantKey,
-                  editingVariantItem.item.id,
-                  { title: title.trim(), time: time || "" }
-                );
-              }}
-              className="space-y-4"
-            >
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">
-                  시간
-                </label>
-                <input
-                  type="time"
-                  name="time"
-                  defaultValue={editingVariantItem.item.time || ""}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 mb-1.5">
-                  일정 제목 *
-                </label>
-                <input
-                  type="text"
-                  name="title"
-                  defaultValue={editingVariantItem.item.title}
-                  className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition-all text-sm"
-                  autoFocus
-                />
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingVariantItem(null)}
-                  className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold text-sm hover:bg-slate-50 transition-colors"
-                >
-                  취소
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 py-3.5 rounded-xl bg-blue-600 text-white font-bold text-sm hover:bg-blue-700 transition-colors"
-                >
-                  수정하기
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {editingVariantItem && selectedTripData && (
+        <EditItineraryModal
+          item={(() => {
+            const group = planGroups.find(
+              (g) => g.id === editingVariantItem.groupId
+            );
+            return convertVariantItemForEdit(
+              editingVariantItem.item,
+              group?.day || 1
+            );
+          })()}
+          travelDays={travelDays}
+          onClose={() => setEditingVariantItem(null)}
+          onUpdate={handleUpdateVariantItemFull}
+          onDelete={handleDeleteVariantItemFromModal}
+          disableDayChange={true}
+        />
       )}
 
       {/* -------------------- FLOATING: SELECTION ACTION BAR -------------------- */}

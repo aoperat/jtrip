@@ -121,14 +121,23 @@ export function usePlanGroups(travelId) {
 
   // App 아이템을 DB 아이템으로 변환
   const transformItemToDb = (appItem, variant, displayOrder) => {
-    const { id, originalItineraryId, ...rest } = appItem;
+    const { id, originalItineraryId, title, time, image, ...rest } = appItem;
     return {
       variant,
       itinerary_id: originalItineraryId || null,
-      title: appItem.title || '',
-      time: appItem.time || null,
-      image_url: appItem.image || null,
-      item_data: rest || null,
+      title: title || '',
+      time: time || null,
+      image_url: image || null,
+      item_data: {
+        desc: rest.desc || '',
+        locationName: rest.locationName || null,
+        address: rest.address || null,
+        latitude: rest.latitude || null,
+        longitude: rest.longitude || null,
+        imagePositionX: rest.imagePositionX ?? 0,
+        imagePositionY: rest.imagePositionY ?? 0,
+        imageScale: rest.imageScale || 400,
+      },
       display_order: displayOrder,
     };
   };

@@ -10,6 +10,7 @@ export default function EditItineraryModal({
   onClose,
   onUpdate,
   onDelete,
+  disableDayChange = false,
 }) {
   const [formData, setFormData] = useState({
     day: item?.day || 1,
@@ -248,12 +249,12 @@ export default function EditItineraryModal({
   };
 
   return (
-    <div className="absolute inset-0 z-[210] bg-slate-900/60 backdrop-blur-sm flex items-end animate-in fade-in duration-300">
-      <div className="w-full bg-white rounded-t-[40px] p-8 animate-in slide-in-from-bottom-10 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto">
-        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-8" />
+    <div className="absolute inset-0 z-[210] bg-slate-900/60 backdrop-blur-sm flex items-end md:items-center md:justify-center animate-in fade-in duration-300">
+      <div className="w-full md:w-auto md:min-w-[600px] md:max-w-4xl bg-white rounded-t-[40px] md:rounded-[32px] p-6 md:p-8 animate-in slide-in-from-bottom-10 md:slide-in-from-bottom-0 md:zoom-in-95 duration-500 shadow-2xl max-h-[90vh] overflow-y-auto md:mx-4">
+        <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6 md:hidden" />
         <div className="flex items-start justify-between mb-6">
-          <h2 className="text-xl font-black mb-6 text-center leading-tight tracking-tight">
-            일정 수정 📝
+          <h2 className="text-xl font-black leading-tight tracking-tight">
+            일정 수정
           </h2>
           <button
             onClick={onClose}
@@ -263,75 +264,82 @@ export default function EditItineraryModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 mb-10">
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-              일차
-            </label>
-            <select
-              value={formData.day}
-              onChange={(e) =>
-                setFormData({ ...formData, day: parseInt(e.target.value) })
-              }
-              required
-              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
-            >
-              {travelDays.map((dayInfo) => (
-                <option key={dayInfo.day} value={dayInfo.day}>
-                  Day {dayInfo.day} ({dayInfo.dateString})
-                </option>
-              ))}
-            </select>
+        <form onSubmit={handleSubmit} className="md:grid md:grid-cols-2 md:gap-8 space-y-4 md:space-y-0 mb-6">
+          {/* 왼쪽 컬럼: 기본 정보 */}
+          <div className="space-y-4">
+            {!disableDayChange && (
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                  일차
+                </label>
+                <select
+                  value={formData.day}
+                  onChange={(e) =>
+                    setFormData({ ...formData, day: parseInt(e.target.value) })
+                  }
+                  required
+                  className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
+                >
+                  {travelDays.map((dayInfo) => (
+                    <option key={dayInfo.day} value={dayInfo.day}>
+                      Day {dayInfo.day} ({dayInfo.dateString})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                시간 (선택)
+              </label>
+              <input
+                type="time"
+                value={formData.time}
+                onChange={(e) =>
+                  setFormData({ ...formData, time: e.target.value })
+                }
+                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                제목
+              </label>
+              <input
+                value={formData.title}
+                onChange={(e) =>
+                  setFormData({ ...formData, title: e.target.value })
+                }
+                autoFocus
+                required
+                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+                placeholder="예: 인천공항 출발"
+              />
+            </div>
+
+            <div>
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                설명 (선택)
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) =>
+                  setFormData({ ...formData, description: e.target.value })
+                }
+                rows={3}
+                className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm resize-none"
+                placeholder="상세 설명을 입력하세요"
+              />
+            </div>
           </div>
 
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-              시간 (선택)
-            </label>
-            <input
-              type="time"
-              value={formData.time}
-              onChange={(e) =>
-                setFormData({ ...formData, time: e.target.value })
-              }
-              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-              제목
-            </label>
-            <input
-              value={formData.title}
-              onChange={(e) =>
-                setFormData({ ...formData, title: e.target.value })
-              }
-              autoFocus
-              required
-              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
-              placeholder="예: 인천공항 출발"
-            />
-          </div>
-
-          <div>
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-              설명 (선택)
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) =>
-                setFormData({ ...formData, description: e.target.value })
-              }
-              rows={3}
-              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm resize-none"
-              placeholder="상세 설명을 입력하세요"
-            />
-          </div>
-
-          {/* 사진 업로드 섹션 */}
-          <div className="border-t border-slate-100 pt-4 space-y-3">
-            <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+          {/* 오른쪽 컬럼: 사진 및 장소 */}
+          <div className="space-y-4">
+            {/* 사진 업로드 섹션 */}
+            <div className="border-t md:border-t-0 border-slate-100 pt-4 md:pt-0 space-y-3">
+              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
               사진 (선택)
             </label>
             {imagePreview ? (
@@ -473,42 +481,45 @@ export default function EditItineraryModal({
                 </button>
               </div>
             )}
-          </div>
-
-          <div className="border-t border-slate-100 pt-4 space-y-4">
-            <p className="text-xs font-bold text-slate-600 mb-3">
-              📍 장소 정보 (맵 표시용)
-            </p>
-
-            <div>
-              <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
-                장소 검색
-              </label>
-              <PlaceSearchInput
-                onPlaceSelect={handlePlaceSelect}
-                placeholder="장소명을 입력하세요 (예: 인천국제공항, Tokyo Station)"
-                initialValue={locationData?.locationName || ""}
-              />
             </div>
 
-            {locationData && (
-              <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
-                <p className="text-xs font-bold text-blue-600 mb-2">
-                  선택된 장소:
-                </p>
-                <p className="text-sm font-bold text-slate-800 mb-1">
-                  {locationData.locationName}
-                </p>
-                <p className="text-xs text-slate-600">{locationData.address}</p>
-                <p className="text-[10px] text-slate-400 mt-2">
-                  좌표: {locationData.latitude.toFixed(6)},{" "}
-                  {locationData.longitude.toFixed(6)}
-                </p>
+            {/* 장소 정보 섹션 */}
+            <div className="border-t border-slate-100 pt-4 space-y-4">
+              <p className="text-xs font-bold text-slate-600 mb-3">
+                📍 장소 정보 (맵 표시용)
+              </p>
+
+              <div>
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1.5 block ml-1 leading-none">
+                  장소 검색
+                </label>
+                <PlaceSearchInput
+                  onPlaceSelect={handlePlaceSelect}
+                  placeholder="장소명을 입력하세요 (예: 인천국제공항, Tokyo Station)"
+                  initialValue={locationData?.locationName || ""}
+                />
               </div>
-            )}
+
+              {locationData && (
+                <div className="bg-blue-50 p-4 rounded-2xl border border-blue-100">
+                  <p className="text-xs font-bold text-blue-600 mb-2">
+                    선택된 장소:
+                  </p>
+                  <p className="text-sm font-bold text-slate-800 mb-1">
+                    {locationData.locationName}
+                  </p>
+                  <p className="text-xs text-slate-600">{locationData.address}</p>
+                  <p className="text-[10px] text-slate-400 mt-2">
+                    좌표: {locationData.latitude.toFixed(6)},{" "}
+                    {locationData.longitude.toFixed(6)}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
 
-          <div className="flex gap-3 pt-4">
+          {/* 버튼 섹션 - 두 컬럼 걸침 */}
+          <div className="flex gap-3 pt-4 md:col-span-2">
             <button
               type="button"
               onClick={handleDelete}

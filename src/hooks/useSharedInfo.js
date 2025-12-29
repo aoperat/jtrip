@@ -164,6 +164,7 @@ export function useSharedInfo(travelId) {
         .from('notices')
         .insert({
           travel_id: travelId,
+          title: noticeData.title || null,
           content: noticeData.content,
           author_id: user.id,
         })
@@ -226,7 +227,7 @@ export function useSharedInfo(travelId) {
     }
   };
 
-  const updateNotice = async (id, content) => {
+  const updateNotice = async (id, updates) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('로그인이 필요합니다.');
@@ -234,7 +235,8 @@ export function useSharedInfo(travelId) {
       const { data, error: updateError } = await supabase
         .from('notices')
         .update({
-          content: content,
+          title: updates.title || null,
+          content: updates.content,
         })
         .eq('id', id)
         .eq('travel_id', travelId)

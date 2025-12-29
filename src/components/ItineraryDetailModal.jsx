@@ -196,7 +196,7 @@ export default function ItineraryDetailModal({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-56">
+      <main className="flex-1 overflow-y-auto p-6 space-y-8 pb-32">
         {/* Header Image */}
         {item.image && (
           <div className="relative h-64 -mx-6 -mt-6 mb-6 overflow-hidden bg-slate-100">
