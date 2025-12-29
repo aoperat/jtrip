@@ -100,6 +100,7 @@ CREATE TABLE IF NOT EXISTS expenses (
 CREATE TABLE IF NOT EXISTS notices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   travel_id UUID REFERENCES travels(id) ON DELETE CASCADE,
+  title TEXT,
   content TEXT NOT NULL,
   author_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
