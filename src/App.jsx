@@ -85,6 +85,7 @@ function App() {
   const [view, setView] = useState("home");
   const [viewHistory, setViewHistory] = useState([]); // 뷰 히스토리 추적
   const [activeTab, setActiveTab] = useState("schedule");
+  const [tabHistory, setTabHistory] = useState([]); // 탭 히스토리 추적
   const [scheduleMode, setScheduleMode] = useState("list");
 
   const [selectedTripId, setSelectedTripId] = useState(null);
@@ -115,6 +116,9 @@ function App() {
   const [showAddTicketModal, setShowAddTicketModal] = useState(false);
   const [showTicketLinkModal, setShowTicketLinkModal] = useState(false);
   const [showAddPrepModal, setShowAddPrepModal] = useState(false);
+  const [showPrepLinkModal, setShowPrepLinkModal] = useState(false);
+  const [showExpenseLinkModal, setShowExpenseLinkModal] = useState(false);
+  const [showInfoLinkModal, setShowInfoLinkModal] = useState(false);
   const [showAddInfoModal, setShowAddInfoModal] = useState(false);
   const [showAddNoticeModal, setShowAddNoticeModal] = useState(false);
   const [editingInfo, setEditingInfo] = useState(null);
@@ -630,6 +634,21 @@ function App() {
 
   // 뒤로가기 함수
   const goBack = () => {
+    // 먼저 탭 히스토리가 있으면 탭 복원
+    if (tabHistory.length > 0) {
+      const previousState = tabHistory[tabHistory.length - 1];
+      setTabHistory((prev) => prev.slice(0, -1));
+      setActiveTab(previousState.tab);
+      if (previousState.day !== undefined) {
+        setSelectedDay(previousState.day);
+      }
+      // 상세보기에서 왔으면 상세보기 복원
+      if (previousState.itineraryItem) {
+        setSelectedItineraryItem(previousState.itineraryItem);
+      }
+      return;
+    }
+    // 탭 히스토리가 없으면 뷰 히스토리 확인
     if (viewHistory.length > 0) {
       const previousView = viewHistory[viewHistory.length - 1];
       setViewHistory((prev) => prev.slice(0, -1));
@@ -640,12 +659,45 @@ function App() {
     }
   };
 
+  // 탭 이동 함수 (히스토리 추적) - 리스트에서 배지 클릭 시 사용
+  const navigateToTab = (newTab) => {
+    if (activeTab !== newTab) {
+      setTabHistory((prev) => [...prev, { tab: activeTab, day: selectedDay, itineraryItem: null }]);
+      setActiveTab(newTab);
+    }
+  };
+
+  // 상세보기에서 탭 이동 함수 - 상세보기에서 연동 항목 클릭 시 사용
+  const navigateToTabFromDetail = (newTab, itineraryItem) => {
+    setTabHistory((prev) => [...prev, { tab: activeTab, day: selectedDay, itineraryItem }]);
+    setActiveTab(newTab);
+    setSelectedItineraryItem(null);
+  };
+
+  // 히스토리 기반 뒤로가기 (상세보기에서 연동 항목 닫을 때 사용)
+  const goBackFromLinkedView = () => {
+    if (tabHistory.length > 0) {
+      const previousState = tabHistory[tabHistory.length - 1];
+      setTabHistory((prev) => prev.slice(0, -1));
+      setActiveTab(previousState.tab);
+      if (previousState.day !== undefined) {
+        setSelectedDay(previousState.day);
+      }
+      if (previousState.itineraryItem) {
+        setSelectedItineraryItem(previousState.itineraryItem);
+      }
+      return true;
+    }
+    return false;
+  };
+
   const openTrip = (trip) => {
     setSelectedTripId(trip.id);
     navigateToView("detail");
     setActiveTab("schedule");
     setSelectedDay("all");
     setCheckedItems(new Set());
+    setTabHistory([]); // 탭 히스토리 초기화
   };
 
   const getLinkedItemName = (id) => {
@@ -1500,65 +1552,21 @@ function App() {
                                           </button>
                                         </div>
                                         <div className="flex-1 overflow-hidden relative z-10">
-                                          <div className="flex justify-between items-start mb-1">
-                                            <span
-                                              className={`text-[10px] font-bold uppercase tracking-widest ${
-                                                isChecked
-                                                  ? item.image
-                                                    ? "text-white/60"
-                                                    : "text-slate-300"
-                                                  : item.image
-                                                  ? "text-white"
-                                                  : "text-blue-500"
-                                              }`}
-                                            >
-                                              {item.time}
-                                            </span>
-                                            <div className="flex flex-wrap justify-end gap-1 max-w-[150px]">
-                                              {item.hasTicket && (
-                                                <LinkedBadge
-                                                  color="orange"
-                                                  icon={Ticket}
-                                                  label="TICKET"
-                                                  onClick={() =>
-                                                    setActiveTab("tickets")
-                                                  }
-                                                />
-                                              )}
-                                              {item.prepId && (
-                                                <LinkedBadge
-                                                  color="blue"
-                                                  icon={CheckSquare}
-                                                  label="PREP"
-                                                  onClick={() =>
-                                                    setActiveTab("preps")
-                                                  }
-                                                />
-                                              )}
-                                              {item.infoId && (
-                                                <LinkedBadge
-                                                  color="slate"
-                                                  icon={Info}
-                                                  label="INFO"
-                                                  onClick={() =>
-                                                    setActiveTab("info")
-                                                  }
-                                                />
-                                              )}
-                                              {linkedExpense && (
-                                                <LinkedBadge
-                                                  color="green"
-                                                  icon={DollarSign}
-                                                  label={`₩${linkedExpense.amount.toLocaleString()}`}
-                                                  onClick={() =>
-                                                    setActiveTab("budget")
-                                                  }
-                                                />
-                                              )}
-                                            </div>
-                                          </div>
+                                          <span
+                                            className={`text-[10px] font-bold uppercase tracking-widest ${
+                                              isChecked
+                                                ? item.image
+                                                  ? "text-white/60"
+                                                  : "text-slate-300"
+                                                : item.image
+                                                ? "text-white"
+                                                : "text-blue-500"
+                                            }`}
+                                          >
+                                            {item.time}
+                                          </span>
                                           <h3
-                                            className={`font-bold text-sm leading-tight ${
+                                            className={`font-bold text-sm leading-tight mt-1 ${
                                               isChecked
                                                 ? item.image
                                                   ? "text-white/70 line-through"
@@ -1570,15 +1578,62 @@ function App() {
                                           >
                                             {item.title}
                                           </h3>
-                                          <p
-                                            className={`text-[11px] mt-0.5 leading-tight ${
-                                              item.image
-                                                ? "text-white/80"
-                                                : "text-slate-400"
-                                            }`}
-                                          >
-                                            {item.desc}
-                                          </p>
+                                          {item.desc && (
+                                            <p
+                                              className={`text-[11px] mt-0.5 leading-tight ${
+                                                item.image
+                                                  ? "text-white/80"
+                                                  : "text-slate-400"
+                                              }`}
+                                            >
+                                              {item.desc}
+                                            </p>
+                                          )}
+                                          {/* 배지 - 하단 배치 */}
+                                          {(item.hasTicket || item.prepId || item.infoId || linkedExpense) && (
+                                            <div className="flex flex-wrap gap-1 mt-2">
+                                              {item.hasTicket && (
+                                                <LinkedBadge
+                                                  color="orange"
+                                                  icon={Ticket}
+                                                  label="TICKET"
+                                                  onClick={() =>
+                                                    navigateToTab("tickets")
+                                                  }
+                                                />
+                                              )}
+                                              {item.prepId && (
+                                                <LinkedBadge
+                                                  color="blue"
+                                                  icon={CheckSquare}
+                                                  label="PREP"
+                                                  onClick={() =>
+                                                    navigateToTab("preps")
+                                                  }
+                                                />
+                                              )}
+                                              {item.infoId && (
+                                                <LinkedBadge
+                                                  color="slate"
+                                                  icon={Info}
+                                                  label="INFO"
+                                                  onClick={() =>
+                                                    navigateToTab("info")
+                                                  }
+                                                />
+                                              )}
+                                              {linkedExpense && (
+                                                <LinkedBadge
+                                                  color="green"
+                                                  icon={DollarSign}
+                                                  label={`₩${linkedExpense.amount.toLocaleString()}`}
+                                                  onClick={() =>
+                                                    navigateToTab("budget")
+                                                  }
+                                                />
+                                              )}
+                                            </div>
+                                          )}
                                         </div>
                                       </div>
                                     </div>
@@ -2071,67 +2126,21 @@ function App() {
                                       </div>
                                     )}
                                     <div className="flex-1 overflow-hidden relative z-10">
-                                      <div className="flex justify-between items-start mb-1">
-                                        <span
-                                          className={`text-[10px] font-bold uppercase tracking-widest ${
-                                            isChecked
-                                              ? item.image
-                                                ? "text-white/60"
-                                                : "text-slate-300"
-                                              : item.image
-                                              ? "text-white"
-                                              : "text-blue-500"
-                                          }`}
-                                        >
-                                          {item.time}
-                                        </span>
-                                        {!selectionMode && (
-                                          <div className="flex flex-wrap justify-end gap-1 max-w-[150px]">
-                                            {item.hasTicket && (
-                                              <LinkedBadge
-                                                color="orange"
-                                                icon={Ticket}
-                                                label="TICKET"
-                                                onClick={() =>
-                                                  setActiveTab("tickets")
-                                                }
-                                              />
-                                            )}
-                                            {item.prepId && (
-                                              <LinkedBadge
-                                                color="blue"
-                                                icon={CheckSquare}
-                                                label="PREP"
-                                                onClick={() =>
-                                                  setActiveTab("preps")
-                                                }
-                                              />
-                                            )}
-                                            {item.infoId && (
-                                              <LinkedBadge
-                                                color="slate"
-                                                icon={Info}
-                                                label="INFO"
-                                                onClick={() =>
-                                                  setActiveTab("info")
-                                                }
-                                              />
-                                            )}
-                                            {linkedExpense && (
-                                              <LinkedBadge
-                                                color="green"
-                                                icon={DollarSign}
-                                                label={`₩${linkedExpense.amount.toLocaleString()}`}
-                                                onClick={() =>
-                                                  setActiveTab("budget")
-                                                }
-                                              />
-                                            )}
-                                          </div>
-                                        )}
-                                      </div>
+                                      <span
+                                        className={`text-[10px] font-bold uppercase tracking-widest ${
+                                          isChecked
+                                            ? item.image
+                                              ? "text-white/60"
+                                              : "text-slate-300"
+                                            : item.image
+                                            ? "text-white"
+                                            : "text-blue-500"
+                                        }`}
+                                      >
+                                        {item.time}
+                                      </span>
                                       <h3
-                                        className={`font-bold text-sm leading-tight ${
+                                        className={`font-bold text-sm leading-tight mt-1 ${
                                           isChecked
                                             ? item.image
                                               ? "text-white/70 line-through"
@@ -2143,15 +2152,62 @@ function App() {
                                       >
                                         {item.title}
                                       </h3>
-                                      <p
-                                        className={`text-[11px] mt-0.5 leading-tight ${
-                                          item.image
-                                            ? "text-white/80"
-                                            : "text-slate-400"
-                                        }`}
-                                      >
-                                        {item.desc}
-                                      </p>
+                                      {item.desc && (
+                                        <p
+                                          className={`text-[11px] mt-0.5 leading-tight ${
+                                            item.image
+                                              ? "text-white/80"
+                                              : "text-slate-400"
+                                          }`}
+                                        >
+                                          {item.desc}
+                                        </p>
+                                      )}
+                                      {/* 배지 - 하단 배치 */}
+                                      {!selectionMode && (item.hasTicket || item.prepId || item.infoId || linkedExpense) && (
+                                        <div className="flex flex-wrap gap-1 mt-2">
+                                          {item.hasTicket && (
+                                            <LinkedBadge
+                                              color="orange"
+                                              icon={Ticket}
+                                              label="TICKET"
+                                              onClick={() =>
+                                                navigateToTab("tickets")
+                                              }
+                                            />
+                                          )}
+                                          {item.prepId && (
+                                            <LinkedBadge
+                                              color="blue"
+                                              icon={CheckSquare}
+                                              label="PREP"
+                                              onClick={() =>
+                                                navigateToTab("preps")
+                                              }
+                                            />
+                                          )}
+                                          {item.infoId && (
+                                            <LinkedBadge
+                                              color="slate"
+                                              icon={Info}
+                                              label="INFO"
+                                              onClick={() =>
+                                                navigateToTab("info")
+                                              }
+                                            />
+                                          )}
+                                          {linkedExpense && (
+                                            <LinkedBadge
+                                              color="green"
+                                              icon={DollarSign}
+                                              label={`₩${linkedExpense.amount.toLocaleString()}`}
+                                              onClick={() =>
+                                                navigateToTab("budget")
+                                              }
+                                            />
+                                          )}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
@@ -2596,7 +2652,8 @@ function App() {
                                 setEditingNotice(notice);
                                 setShowAddNoticeModal(true);
                               }}
-                              className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                              className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                              title="수정"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -2614,7 +2671,8 @@ function App() {
                                   }
                                 }
                               }}
-                              className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                              className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                              title="삭제"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -2669,7 +2727,8 @@ function App() {
                                   setEditingInfo(info);
                                   setShowAddInfoModal(true);
                                 }}
-                                className="p-1.5 bg-white rounded-lg text-blue-500 hover:bg-blue-50 transition-colors shadow-sm"
+                                className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-blue-50 hover:text-blue-500 transition-colors"
+                                title="수정"
                               >
                                 <Edit2 className="w-3.5 h-3.5" />
                               </button>
@@ -2689,23 +2748,26 @@ function App() {
                                     }
                                   }
                                 }}
-                                className="p-1.5 bg-white rounded-lg text-red-500 hover:bg-red-50 transition-colors shadow-sm"
+                                className="p-1.5 bg-slate-50 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors"
+                                title="삭제"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-blue-50 text-blue-500 leading-none">
-                                {info.category}
-                              </span>
-                              {linkedName && <LinkBadge label={linkedName} />}
-                            </div>
+                            <span className="text-[9px] font-black uppercase tracking-tighter px-2 py-0.5 rounded bg-blue-50 text-blue-500 leading-none inline-block mb-2">
+                              {info.category}
+                            </span>
                             <h4 className="font-bold text-slate-800 text-sm mb-1">
                               {info.title}
                             </h4>
                             <p className="text-xs text-slate-400 leading-normal">
                               {info.content}
                             </p>
+                            {linkedName && (
+                              <div className="mt-2">
+                                <LinkBadge label={linkedName} />
+                              </div>
+                            )}
                           </div>
                         );
                       })
@@ -2826,7 +2888,7 @@ function App() {
 
       {/* TICKET LINK SELECTION MODAL */}
       {showTicketLinkModal && selectedItineraryItem && (
-        <div className="fixed inset-0 z-[200] flex items-end justify-center">
+        <div className="fixed inset-0 z-[300] flex items-end justify-center">
           <div
             className="absolute inset-0 bg-black/50 animate-in fade-in duration-300"
             onClick={() => setShowTicketLinkModal(false)}
@@ -2899,6 +2961,234 @@ function App() {
             {/* 취소 버튼 */}
             <button
               onClick={() => setShowTicketLinkModal(false)}
+              className="w-full py-4 mt-3 bg-slate-100 text-slate-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PREP LINK SELECTION MODAL */}
+      {showPrepLinkModal && selectedItineraryItem && (
+        <div className="fixed inset-0 z-[300] flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 animate-in fade-in duration-300"
+            onClick={() => setShowPrepLinkModal(false)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-t-[40px] p-8 pb-12 animate-in slide-in-from-bottom duration-500 max-h-[80vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
+            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">
+              준비물 연결 🎒
+            </h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              {selectedItineraryItem.title}에 연결할 준비물을 선택하세요
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                기존 준비물 연동
+              </p>
+              {preparations?.filter(p => !p.linkedItineraryId).map((prep) => (
+                <button
+                  key={prep.id}
+                  onClick={async () => {
+                    const result = await updatePreparation(prep.id, {
+                      ...prep,
+                      linkedItineraryId: selectedItineraryItem.id,
+                    });
+                    if (!result.error) {
+                      addNotification(`${prep.content}이(가) 연동되었습니다.`);
+                      setShowPrepLinkModal(false);
+                    }
+                  }}
+                  className="w-full p-4 bg-blue-50 border border-blue-100 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition-all text-left"
+                >
+                  <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm">
+                    <CheckSquare className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800">{prep.content}</p>
+                    <p className="text-xs text-slate-400">
+                      {prep.mode === 'common' ? '공용' : '개별'} · {prep.isChecked ? '완료' : '미완료'}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-blue-300" />
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs text-slate-400 font-medium">또는</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            <button
+              onClick={() => {
+                setShowPrepLinkModal(false);
+                setShowAddPrepModal(true);
+              }}
+              className="w-full py-4 bg-blue-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-blue-100"
+            >
+              <Plus className="w-5 h-5" />
+              새 준비물 추가
+            </button>
+
+            <button
+              onClick={() => setShowPrepLinkModal(false)}
+              className="w-full py-4 mt-3 bg-slate-100 text-slate-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* EXPENSE LINK SELECTION MODAL */}
+      {showExpenseLinkModal && selectedItineraryItem && (
+        <div className="fixed inset-0 z-[300] flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 animate-in fade-in duration-300"
+            onClick={() => setShowExpenseLinkModal(false)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-t-[40px] p-8 pb-12 animate-in slide-in-from-bottom duration-500 max-h-[80vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
+            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">
+              지출 연결 💰
+            </h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              {selectedItineraryItem.title}에 연결할 지출을 선택하세요
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                기존 지출 연동
+              </p>
+              {expenses?.filter(e => !e.linkedItineraryId).map((expense) => (
+                <button
+                  key={expense.id}
+                  onClick={async () => {
+                    const result = await updateExpense(expense.id, {
+                      ...expense,
+                      linkedItineraryId: selectedItineraryItem.id,
+                    });
+                    if (!result.error) {
+                      addNotification(`${expense.title}이(가) 연동되었습니다.`);
+                      setShowExpenseLinkModal(false);
+                    }
+                  }}
+                  className="w-full p-4 bg-green-50 border border-green-100 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition-all text-left"
+                >
+                  <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-green-500 shadow-sm">
+                    <DollarSign className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800">{expense.title}</p>
+                    <p className="text-xs text-slate-400">
+                      ₩{expense.amount?.toLocaleString()}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-green-300" />
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs text-slate-400 font-medium">또는</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            <button
+              onClick={() => {
+                setShowExpenseLinkModal(false);
+                setShowAddExpenseModal(true);
+              }}
+              className="w-full py-4 bg-green-600 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-green-100"
+            >
+              <Plus className="w-5 h-5" />
+              새 지출 추가
+            </button>
+
+            <button
+              onClick={() => setShowExpenseLinkModal(false)}
+              className="w-full py-4 mt-3 bg-slate-100 text-slate-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* INFO LINK SELECTION MODAL */}
+      {showInfoLinkModal && selectedItineraryItem && (
+        <div className="fixed inset-0 z-[300] flex items-end justify-center">
+          <div
+            className="absolute inset-0 bg-black/50 animate-in fade-in duration-300"
+            onClick={() => setShowInfoLinkModal(false)}
+          />
+          <div className="relative w-full max-w-lg bg-white rounded-t-[40px] p-8 pb-12 animate-in slide-in-from-bottom duration-500 max-h-[80vh] overflow-y-auto">
+            <div className="w-12 h-1.5 bg-slate-200 rounded-full mx-auto mb-6" />
+            <h2 className="text-2xl font-black text-slate-900 mb-2 text-center">
+              여행팁 연결 💡
+            </h2>
+            <p className="text-sm text-slate-500 text-center mb-6">
+              {selectedItineraryItem.title}에 연결할 여행팁을 선택하세요
+            </p>
+
+            <div className="space-y-3 mb-6">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                기존 여행팁 연동
+              </p>
+              {sharedInfo?.filter(i => !i.linkedItineraryId).map((info) => (
+                <button
+                  key={info.id}
+                  onClick={async () => {
+                    const result = await updateSharedInfo(info.id, {
+                      ...info,
+                      linkedItineraryId: selectedItineraryItem.id,
+                    });
+                    if (!result.error) {
+                      addNotification(`${info.title}이(가) 연동되었습니다.`);
+                      setShowInfoLinkModal(false);
+                    }
+                  }}
+                  className="w-full p-4 bg-slate-100 border border-slate-200 rounded-2xl flex items-center gap-4 active:scale-[0.98] transition-all text-left"
+                >
+                  <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center text-slate-500 shadow-sm">
+                    <Info className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-bold text-slate-800">{info.title}</p>
+                    <p className="text-xs text-slate-400 line-clamp-1">
+                      {info.content}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-5 h-5 text-slate-300" />
+                </button>
+              ))}
+            </div>
+
+            <div className="flex items-center gap-4 mb-6">
+              <div className="flex-1 h-px bg-slate-200" />
+              <span className="text-xs text-slate-400 font-medium">또는</span>
+              <div className="flex-1 h-px bg-slate-200" />
+            </div>
+
+            <button
+              onClick={() => {
+                setShowInfoLinkModal(false);
+                setShowAddInfoModal(true);
+              }}
+              className="w-full py-4 bg-slate-700 text-white rounded-2xl font-bold text-sm flex items-center justify-center gap-2 active:scale-95 transition-all shadow-xl shadow-slate-200"
+            >
+              <Plus className="w-5 h-5" />
+              새 여행팁 추가
+            </button>
+
+            <button
+              onClick={() => setShowInfoLinkModal(false)}
               className="w-full py-4 mt-3 bg-slate-100 text-slate-500 rounded-2xl font-bold text-sm active:scale-95 transition-all"
             >
               취소
@@ -3090,7 +3380,10 @@ function App() {
         <div className="absolute inset-0 z-[60] bg-white flex flex-col animate-in slide-in-from-right-10 duration-300">
           <header className="px-6 pt-10 pb-4 border-b border-slate-50 flex items-center gap-4">
             <button
-              onClick={() => setSelectedTicketType(null)}
+              onClick={() => {
+                setSelectedTicketType(null);
+                goBackFromLinkedView();
+              }}
               className="p-2 bg-slate-50 rounded-full text-slate-400 active:scale-90 transition-all"
             >
               <ChevronLeft className="w-5 h-5" />
@@ -3261,7 +3554,10 @@ function App() {
               </button>
             </div>
             <button
-              onClick={() => setSelectedTicketType(null)}
+              onClick={() => {
+                setSelectedTicketType(null);
+                goBackFromLinkedView();
+              }}
               className="w-full py-5 bg-slate-900 rounded-[32px] font-black text-white text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all"
             >
               닫기
@@ -3872,11 +4168,13 @@ function App() {
             return await deleteItineraryItem(selectedItineraryItem.id);
           }}
           onNavigate={(tab) => {
-            setActiveTab(tab);
-            setSelectedItineraryItem(null);
+            navigateToTabFromDetail(tab, selectedItineraryItem);
           }}
           onViewTicket={(ticketType) => {
+            // 상세보기에서 티켓 보기 시 히스토리 저장
+            setTabHistory((prev) => [...prev, { tab: activeTab, day: selectedDay, itineraryItem: selectedItineraryItem }]);
             setSelectedTicketType(ticketType);
+            setActiveTab("tickets");
             setSelectedItineraryItem(null);
           }}
           onCreateTicket={() => {
@@ -3889,13 +4187,31 @@ function App() {
             }
           }}
           onCreatePrep={() => {
-            setShowAddPrepModal(true);
+            // 연동되지 않은 기존 준비물이 있으면 선택 모달 표시
+            const unlinkedPreps = preparations?.filter(p => !p.linkedItineraryId) || [];
+            if (unlinkedPreps.length > 0) {
+              setShowPrepLinkModal(true);
+            } else {
+              setShowAddPrepModal(true);
+            }
           }}
           onCreateExpense={() => {
-            setShowAddExpenseModal(true);
+            // 연동되지 않은 기존 지출이 있으면 선택 모달 표시
+            const unlinkedExpenses = expenses?.filter(e => !e.linkedItineraryId) || [];
+            if (unlinkedExpenses.length > 0) {
+              setShowExpenseLinkModal(true);
+            } else {
+              setShowAddExpenseModal(true);
+            }
           }}
           onCreateInfo={() => {
-            setShowAddInfoModal(true);
+            // 연동되지 않은 기존 여행팁이 있으면 선택 모달 표시
+            const unlinkedInfos = sharedInfo?.filter(i => !i.linkedItineraryId) || [];
+            if (unlinkedInfos.length > 0) {
+              setShowInfoLinkModal(true);
+            } else {
+              setShowAddInfoModal(true);
+            }
           }}
           onCreateItinerary={() => {
             // 현재 일정의 시간과 날짜를 기본값으로 설정하여 일정 추가 모달 열기
