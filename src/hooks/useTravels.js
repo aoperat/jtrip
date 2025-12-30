@@ -261,6 +261,51 @@ export function useTravels() {
     }
   };
 
+  // 샘플 데이터 삭제 (제목에 "도쿄 여행" 또는 "샘플"이 포함된 여행)
+  const deleteSampleTravels = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error("로그인이 필요합니다.");
+
+      // 샘플 여행 찾기 (제목에 "도쿄" 또는 "샘플"이 포함된 여행)
+      const { data: sampleTravels, error: findError } = await supabase
+        .from("travels")
+        .select("id")
+        .or("title.ilike.%도쿄%,title.ilike.%샘플%,title.ilike.%sample%");
+
+      if (findError) throw findError;
+
+      if (!sampleTravels || sampleTravels.length === 0) {
+        return { deletedCount: 0, error: null };
+      }
+
+      const travelIds = sampleTravels.map((t) => t.id);
+
+      // 관련 데이터 삭제 (CASCADE로 자동 삭제되지만 명시적으로 처리)
+      // 1. travel_participants 삭제
+      await supabase
+        .from("travel_participants")
+        .delete()
+        .in("travel_id", travelIds);
+
+      // 2. travels 삭제
+      const { error: deleteError } = await supabase
+        .from("travels")
+        .delete()
+        .in("id", travelIds);
+
+      if (deleteError) throw deleteError;
+
+      await fetchTravels();
+      return { deletedCount: travelIds.length, error: null };
+    } catch (err) {
+      console.error("샘플 데이터 삭제 실패:", err);
+      return { deletedCount: 0, error: err };
+    }
+  };
+
   // 초대장 생성 (기존 사용자/미가입 사용자 모두)
   const sendInvitation = async (travelId, email) => {
     try {
@@ -558,6 +603,7 @@ export function useTravels() {
     createTravel,
     updateTravel,
     deleteTravel,
+    deleteSampleTravels,
     addParticipant,
     createInviteLink,
     refetch: fetchTravels,

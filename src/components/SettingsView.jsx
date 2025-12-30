@@ -10,12 +10,14 @@ import {
   Camera,
   X,
   Image as ImageIcon,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { uploadAvatar, deleteAvatar } from '../lib/storage';
 
-export default function SettingsView({ user, onClose, onSignOut }) {
+export default function SettingsView({ user, showSampleData, onToggleSampleData, onClose, onSignOut }) {
   const { updateProfile, getProfile } = useAuth();
   const [nickname, setNickname] = useState('');
   const [email, setEmail] = useState('');
@@ -411,6 +413,41 @@ export default function SettingsView({ user, onClose, onSignOut }) {
               )}
             </button>
           </form>
+        </section>
+
+        {/* 표시 설정 섹션 */}
+        <section className="bg-white rounded-[32px] p-6 shadow-sm border border-slate-100">
+          <h2 className="text-lg font-black text-slate-900 mb-6 tracking-tight">
+            표시 설정
+          </h2>
+          
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-xl">
+              <div className="flex items-center gap-3">
+                {showSampleData ? (
+                  <Eye className="w-5 h-5 text-blue-600" />
+                ) : (
+                  <EyeOff className="w-5 h-5 text-slate-400" />
+                )}
+                <div>
+                  <p className="text-sm font-bold text-slate-900">샘플 데이터 표시</p>
+                  <p className="text-xs text-slate-400 mt-0.5">샘플 여행 데이터를 표시합니다</p>
+                </div>
+              </div>
+              <button
+                onClick={onToggleSampleData}
+                className={`relative w-12 h-6 rounded-full transition-colors ${
+                  showSampleData ? 'bg-blue-600' : 'bg-slate-300'
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${
+                    showSampleData ? 'translate-x-6' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
         </section>
 
         {/* 계정 관리 섹션 */}

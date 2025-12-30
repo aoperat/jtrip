@@ -35,6 +35,8 @@ import {
   Trash2,
   Layers,
   Check,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import NavButton from "./components/NavButton";
 import LinkedBadge from "./components/LinkedBadge";
@@ -72,6 +74,7 @@ function App() {
     createTravel,
     updateTravel,
     deleteTravel,
+    deleteSampleTravels,
     addParticipant,
     createInviteLink,
     sendInvitation,
@@ -93,6 +96,12 @@ function App() {
   });
   const [tabHistory, setTabHistory] = useState([]); // 탭 히스토리 추적
   const [scheduleMode, setScheduleMode] = useState("list");
+  
+  // 샘플 데이터 표시 여부 (localStorage에 저장)
+  const [showSampleData, setShowSampleData] = useState(() => {
+    const saved = localStorage.getItem("jtrip_showSampleData");
+    return saved === null ? true : saved === "true"; // 기본값은 true (표시)
+  });
 
   const [selectedTripId, setSelectedTripId] = useState(() => {
     return sessionStorage.getItem("jtrip_selectedTripId") || null;
@@ -212,8 +221,19 @@ function App() {
     deleteNotice,
   } = useSharedInfo(selectedTripId);
 
-  // 선택된 여행 정보 (trips에서 찾기)
-  const selectedTrip = travels.find((t) => t.id === selectedTripId);
+  // 샘플 데이터 필터링
+  const isSampleTravel = (trip) => {
+    const title = trip.title?.toLowerCase() || "";
+    return title.includes("도쿄") || title.includes("샘플") || title.includes("sample");
+  };
+
+  // 필터링된 여행 목록
+  const filteredTravels = showSampleData 
+    ? travels 
+    : travels.filter(t => !isSampleTravel(t));
+
+  // 선택된 여행 정보 (filteredTravels에서 찾기)
+  const selectedTrip = filteredTravels.find((t) => t.id === selectedTripId);
 
   // 선택된 여행에 대한 통합 데이터
   // 일정 항목에 연동 정보 추가
@@ -263,8 +283,8 @@ function App() {
 
   // 저장된 tripId가 유효한지 확인 (travels 로드 후)
   useEffect(() => {
-    if (travels.length > 0 && selectedTripId) {
-      const tripExists = travels.some((t) => t.id === selectedTripId);
+    if (filteredTravels.length > 0 && selectedTripId) {
+      const tripExists = filteredTravels.some((t) => t.id === selectedTripId);
       if (!tripExists) {
         // 저장된 여행이 더 이상 존재하지 않으면 초기화
         setSelectedTripId(null);
@@ -295,6 +315,11 @@ function App() {
   useEffect(() => {
     sessionStorage.setItem("jtrip_selectedDay", String(selectedDay));
   }, [selectedDay]);
+
+  // 샘플 데이터 표시 여부를 localStorage에 저장
+  useEffect(() => {
+    localStorage.setItem("jtrip_showSampleData", String(showSampleData));
+  }, [showSampleData]);
 
   // selectedTicketType을 ticketTypes 변경 시 동기화
   useEffect(() => {
@@ -923,7 +948,23 @@ function App() {
                     }}
                   />
                 </div>
-                {travels.length === 0 ? (
+                {/* 샘플 데이터 숨기기 버튼 */}
+                {travels.some(t => isSampleTravel(t)) && showSampleData && (
+                  <div className="max-w-6xl mx-auto mb-4">
+                    <button
+                      onClick={() => {
+                        if (confirm('샘플 데이터를 숨기시겠습니까? 우측 상단 설정 버튼에서 다시 표시할 수 있습니다.')) {
+                          setShowSampleData(false);
+                        }
+                      }}
+                      className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors flex items-center gap-2"
+                    >
+                      <EyeOff className="w-4 h-4" />
+                      <span>샘플 데이터 숨기기</span>
+                    </button>
+                  </div>
+                )}
+                {filteredTravels.length === 0 ? (
                   <div className="text-center py-20 max-w-6xl mx-auto">
                     <p className="text-slate-400 mb-4">
                       아직 등록된 여행이 없습니다.
@@ -934,7 +975,7 @@ function App() {
                   </div>
                 ) : (
                   <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {travels.map((trip) => (
+                    {filteredTravels.map((trip) => (
                       <div
                         key={trip.id}
                         onClick={() => openTrip(trip)}
@@ -2613,6 +2654,8 @@ function App() {
       {view === "settings" && (
         <SettingsView
           user={user}
+          showSampleData={showSampleData}
+          onToggleSampleData={() => setShowSampleData(!showSampleData)}
           onClose={goBack}
           onSignOut={async () => {
             await signOut();
@@ -4086,7 +4129,7 @@ function App() {
           travel={{
             ...selectedTripData,
             id: selectedTripId,
-            created_by: travels.find((t) => t.id === selectedTripId)
+            created_by: filteredTravels.find((t) => t.id === selectedTripId)
               ?.created_by,
           }}
           currentUserId={user?.id}

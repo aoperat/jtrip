@@ -175,8 +175,8 @@ export default function AddItineraryModal({
   const handleDragEnd = () => {
     if (!isDragging) return;
     
-    // 일정 거리(150px) 이상 드래그하면 모달 닫기
-    if (dragY > 150) {
+    // 일정 거리(200px) 이상 드래그하면 모달 닫기
+    if (dragY > 200) {
       setShowAddItineraryModal(false);
       setLocationData(null);
       setImagePreview(null);
@@ -349,7 +349,8 @@ export default function AddItineraryModal({
               name="time"
               type="time"
               defaultValue={defaultTime || ""}
-              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm"
+              className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 text-sm appearance-none"
+              style={{ minHeight: '52px' }}
             />
           </div>
 
