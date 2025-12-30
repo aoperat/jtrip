@@ -175,8 +175,8 @@ export default function AddItineraryModal({
   const handleDragEnd = () => {
     if (!isDragging) return;
     
-    // 일정 거리(100px) 이상 드래그하면 모달 닫기
-    if (dragY > 100) {
+    // 일정 거리(150px) 이상 드래그하면 모달 닫기
+    if (dragY > 150) {
       setShowAddItineraryModal(false);
       setLocationData(null);
       setImagePreview(null);
