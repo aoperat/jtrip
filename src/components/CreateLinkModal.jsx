@@ -175,7 +175,7 @@ const CreateLinkModal = ({
                       : 'bg-slate-50 text-slate-400 border-slate-100'
                   }`}
                 >
-                  Common
+                  공통
                 </button>
                 <button 
                   type="button"
@@ -186,7 +186,7 @@ const CreateLinkModal = ({
                       : 'bg-slate-50 text-slate-400 border-slate-100'
                   }`}
                 >
-                  Personal
+                  개인
                 </button>
               </div>
               
@@ -203,7 +203,7 @@ const CreateLinkModal = ({
                     <option value="">담당자 미지정</option>
                     {participants.map((p) => (
                       <option key={p.id} value={p.id}>
-                        {p.name || p.email?.split('@')[0] || 'Unknown'}
+                        {p.name || p.email?.split('@')[0] || '알 수 없음'}
                       </option>
                     ))}
                   </select>
@@ -257,10 +257,10 @@ const CreateLinkModal = ({
                 onChange={(e) => setCategory(e.target.value)}
                 className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 text-slate-900 font-bold focus:ring-2 focus:ring-blue-500 appearance-none text-sm"
               >
-                <option value="Tip">Tip</option>
-                <option value="Info">Info</option>
-                <option value="Warning">Warning</option>
-                <option value="Note">Note</option>
+                <option value="Tip">팁</option>
+                <option value="Info">정보</option>
+                <option value="Warning">주의</option>
+                <option value="Note">메모</option>
               </select>
             </div>
           )}

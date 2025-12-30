@@ -58,7 +58,7 @@ export default function SettingsView({ user, onClose, onSignOut }) {
         
         if (isProfileNotFound) {
           // 프로필이 없으면 직접 INSERT
-          const defaultNickname = user.email?.split('@')[0] || 'User';
+          const defaultNickname = user.email?.split('@')[0] || '사용자';
           const { error: createError } = await supabase
             .from('profiles')
             .insert({
@@ -88,18 +88,18 @@ export default function SettingsView({ user, onClose, onSignOut }) {
           console.error('프로필 조회 오류:', profileError);
           setError('프로필을 불러오는데 실패했습니다.');
           // 기본값이라도 설정
-          setNickname(user.email?.split('@')[0] || 'User');
+          setNickname(user.email?.split('@')[0] || '사용자');
         }
       } else {
         // 프로필이 있는 경우
-        setNickname(data?.name || user.email?.split('@')[0] || 'User');
+        setNickname(data?.name || user.email?.split('@')[0] || '사용자');
         setAvatarUrl(data?.avatar_url || '');
       }
     } catch (err) {
       console.error('프로필 로딩 중 예외 발생:', err);
       setError('오류가 발생했습니다.');
       // 에러가 발생해도 기본값은 설정
-      setNickname(user.email?.split('@')[0] || 'User');
+      setNickname(user.email?.split('@')[0] || '사용자');
     } finally {
       setIsLoading(false);
     }

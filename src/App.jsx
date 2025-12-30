@@ -882,10 +882,10 @@ function App() {
             <div className="max-w-6xl mx-auto flex justify-between items-end">
               <div>
                 <h1 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
-                  Trips
+                  여행 리스트
                 </h1>
                 <p className="text-[11px] text-blue-600 font-black uppercase tracking-widest mt-2">
-                  Adventure Awaits
+                  새로운 여행을 시작하세요
                 </p>
               </div>
               <div className="flex gap-2">
@@ -972,48 +972,50 @@ function App() {
                               {trip.date}
                             </p>
                           </div>
-                          {/* 수정/삭제 버튼 - hover 시 표시 */}
-                          <div className="absolute top-3 right-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingTravel(trip);
-                                setTravelImagePreview(trip.image || "");
-                                setTravelImageFile(null);
-                                setShowEditTripModal(true);
-                              }}
-                              className="p-2 bg-white/90 backdrop-blur-sm rounded-full text-blue-600 hover:bg-white transition-colors shadow-lg"
-                              title="수정"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (
-                                  confirm(
-                                    `"${trip.title}" 여행을 삭제하시겠습니까?`
-                                  )
-                                ) {
-                                  const result = await deleteTravel(trip.id);
-                                  if (result.error) {
-                                    alert("삭제 실패: " + result.error.message);
-                                  } else {
-                                    addNotification("여행이 삭제되었습니다.");
-                                    // 현재 선택된 여행이 삭제된 여행이면 홈으로 이동
-                                    if (selectedTripId === trip.id) {
-                                      setView("home");
-                                      setSelectedTripId(null);
+                          {/* 수정/삭제 버튼 - 항상 표시 (소유자만) */}
+                          {trip.created_by === user?.id && (
+                            <div className="absolute top-3 right-3 flex gap-1">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingTravel(trip);
+                                  setTravelImagePreview(trip.image || "");
+                                  setTravelImageFile(null);
+                                  setShowEditTripModal(true);
+                                }}
+                                className="p-1.5 bg-white/80 rounded-lg text-slate-500 active:bg-blue-50 active:text-blue-500 transition-colors"
+                                title="수정"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  if (
+                                    confirm(
+                                      `"${trip.title}" 여행을 삭제하시겠습니까?`
+                                    )
+                                  ) {
+                                    const result = await deleteTravel(trip.id);
+                                    if (result.error) {
+                                      alert("삭제 실패: " + result.error.message);
+                                    } else {
+                                      addNotification("여행이 삭제되었습니다.");
+                                      // 현재 선택된 여행이 삭제된 여행이면 홈으로 이동
+                                      if (selectedTripId === trip.id) {
+                                        setView("home");
+                                        setSelectedTripId(null);
+                                      }
                                     }
                                   }
-                                }
-                              }}
-                              className="p-2 bg-white/90 backdrop-blur-sm rounded-full text-red-600 hover:bg-white transition-colors shadow-lg"
-                              title="삭제"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                                }}
+                                className="p-1.5 bg-white/80 rounded-lg text-slate-500 active:bg-red-50 active:text-red-500 transition-colors"
+                                title="삭제"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <div className="p-4 flex justify-between items-center bg-white">
                           <div className="flex -space-x-2">

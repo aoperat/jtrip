@@ -178,6 +178,7 @@ export function useTravels() {
           start_date: travel.start_date,
           end_date: travel.end_date,
           created_at: travel.created_at,
+          created_by: travel.created_by,
         };
       });
 

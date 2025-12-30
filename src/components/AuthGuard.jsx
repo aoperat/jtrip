@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { LogIn, Mail, Lock, UserPlus, AlertCircle, User } from 'lucide-react';
+import jtripLogo from '../assets/jtrip_logo.png';
 
 export default function AuthGuard({ children }) {
   const { user, loading, signIn, signUp } = useAuth();
@@ -77,15 +78,17 @@ export default function AuthGuard({ children }) {
   // 로딩이 완료되었고 사용자가 없을 때만 로그인 화면 표시
   if (!user) {
     return (
-      <div className="flex items-center justify-center h-screen bg-slate-50 px-6">
+      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 px-6 py-12">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <LogIn className="w-10 h-10 text-blue-600" />
-            </div>
-            <h1 className="text-2xl font-black text-slate-900 mb-2">Travel-With</h1>
-            <p className="text-sm text-slate-400">
-              여행 계획을 함께 만들어보세요
+            <img
+              src={jtripLogo}
+              alt="JTrip Logo"
+              className="w-28 h-28 mx-auto mb-6 drop-shadow-xl"
+            />
+            <h1 className="text-3xl font-black text-slate-900 mb-2 tracking-tight">JTrip</h1>
+            <p className="text-sm text-slate-500">
+              함께 만드는 여행 플래너
             </p>
           </div>
 

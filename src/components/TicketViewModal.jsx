@@ -75,7 +75,7 @@ export default function TicketViewModal({
         </button>
         <div className="flex-1 text-center">
           <span className="px-3 py-1 bg-blue-100 text-blue-600 text-[10px] font-black rounded-full uppercase tracking-widest">
-            {isUrl ? 'Web Link' : 'Ready to Scan'}
+            {isUrl ? '웹 링크' : '스캔 준비'}
           </span>
         </div>
         <div className="w-12" />
@@ -126,7 +126,7 @@ export default function TicketViewModal({
           {ticket.code && !isUrl && (
             <div className="w-full pt-6 border-t-4 border-dashed border-slate-100 text-center">
               <p className="text-[10px] text-slate-300 font-black uppercase tracking-widest mb-2">
-                Voucher Number
+                예약 번호
               </p>
               <p className="text-lg font-mono font-black text-slate-900 break-all">
                 {ticket.code}

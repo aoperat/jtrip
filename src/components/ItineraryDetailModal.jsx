@@ -232,7 +232,7 @@ export default function ItineraryDetailModal({
                         className="w-full h-full rounded-full object-cover"
                       />
                     ) : (
-                      p.image || p.name?.charAt(0)?.toUpperCase() || 'U'
+                      p.image || p.name?.charAt(0)?.toUpperCase() || '사'
                     )}
                   </div>
                 ))}
@@ -281,7 +281,7 @@ export default function ItineraryDetailModal({
         {/* Linked Data Section */}
         <section className="space-y-4 pt-4 border-t border-slate-100">
           <h3 className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400 ml-1 leading-none">
-            Linked Information
+            연결된 정보
           </h3>
           <div className="grid grid-cols-1 gap-3">
             {/* Ticket Card */}
@@ -295,7 +295,7 @@ export default function ItineraryDetailModal({
                 </div>
                 <div className="flex-1">
                   <p className="text-[9px] font-black text-orange-400 uppercase tracking-widest mb-0.5">
-                    Quick-Pass Linked
+                    퀵패스 연결됨
                   </p>
                   <h4 className="font-black text-slate-800 text-sm">
                     {linkedTicket.name}
@@ -323,7 +323,7 @@ export default function ItineraryDetailModal({
                 </div>
                 <div className="flex-1">
                   <p className="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-0.5">
-                    Preparation
+                    준비물
                   </p>
                   <h4 className="font-black text-slate-800 text-sm">
                     {linkedPrep.content}
@@ -351,7 +351,7 @@ export default function ItineraryDetailModal({
                 </div>
                 <div className="flex-1">
                   <p className="text-[9px] font-black text-green-400 uppercase tracking-widest mb-0.5">
-                    Budget Spent
+                    지출 내역
                   </p>
                   <h4 className="font-black text-slate-800 text-sm">
                     ₩{linkedExpense.amount?.toLocaleString()} ({linkedExpense.title})
@@ -379,7 +379,7 @@ export default function ItineraryDetailModal({
                 </div>
                 <div className="flex-1">
                   <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-0.5">
-                    Travel Info Tip
+                    여행 정보
                   </p>
                   <h4 className="font-black text-slate-800 text-sm">
                     {linkedInfo.title}
@@ -448,7 +448,7 @@ export default function ItineraryDetailModal({
           onClick={onClose}
           className="w-full py-5 bg-slate-900 rounded-[32px] font-black text-white text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all"
         >
-          Close Details
+          닫기
         </button>
       </div>
     </div>
